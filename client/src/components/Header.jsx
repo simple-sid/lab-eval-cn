@@ -1,4 +1,3 @@
-import React from 'react';
 import Timer from './Timer';
 import { 
   QuestionMarkCircleIcon, 
@@ -40,9 +39,9 @@ export default function Header({
           <div className="hidden md:flex items-center space-x-2 text-gray-500">
             <div className="w-px h-8 bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
             <QuestionMarkCircleIcon className="w-4 h-4 text-indigo-500" />
-            <span className="text-sm font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-full">
+            <h2 className="text-md font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-full">
               {title}
-            </span>
+            </h2>
           </div>
         </div>
 
@@ -76,7 +75,7 @@ export default function Header({
           {/* Timer */}
           <div className="flex items-center space-x-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-2 rounded-xl border border-gray-200/50 shadow-sm backdrop-blur-sm">
             <div className="p-1 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg">
-              <ClockIcon className="w-4 h-4 text-white" />
+              <ClockIcon className="w-5 h-5 text-white" />
             </div>
             <Timer duration={timeLimit} onExpire={onTimeUp} />
           </div>

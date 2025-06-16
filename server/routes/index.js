@@ -1,4 +1,3 @@
-// routes/index.js
 import { Router } from 'express';
 import pingRoute from './ping.js';
 

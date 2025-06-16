@@ -15,6 +15,7 @@ export default function EditorPane({
   language,
   setLanguage,
   files,
+  setFiles,
   activeFileId,
   setActiveFileId,
   updateCode,
@@ -27,6 +28,7 @@ export default function EditorPane({
   onToggleQuestion,
   showTerminal,
   setShowTerminal,
+  onCloseFile
 }) {
   const [fontSize, setFontSize] = useState(14);
   const [theme, setTheme] = useState('vs-dark');
@@ -154,6 +156,8 @@ export default function EditorPane({
         files={files}
         activeFileId={activeFileId}
         setActiveFileId={setActiveFileId}
+        onCloseFile={onCloseFile}
+        setFiles={setFiles}
       />
 
       {/* Editor */}

@@ -1,4 +1,3 @@
- // routes/ping.js
 import { Router } from 'express';
 
 const router = Router();

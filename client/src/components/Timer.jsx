@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Timer({ duration, onExpire }) {
   const [timeLeft, setTimeLeft] = useState(duration);
@@ -29,8 +29,8 @@ export default function Timer({ duration, onExpire }) {
 
   const getColorClass = () => {
     if (timeLeft <= 300) return 'text-red-600 font-bold animate-pulse'; // 5 minutes
-    if (timeLeft <= 900) return 'text-orange-600 font-semibold'; // 15 minutes
-    return 'text-gray-700 font-medium';
+    if (timeLeft <= 900) return 'text-orange-600 font-black'; // 15 minutes
+    return 'text-gray-700 font-bold';
   };
 
   const getProgressPercentage = () => {
@@ -45,11 +45,11 @@ export default function Timer({ duration, onExpire }) {
 
   return (
     <div className="flex items-center space-x-3">
-      <div className={`text-sm font-mono ${getColorClass()} select-none`}>
+      <div className={`text-md font-mono ${getColorClass()} select-none`}>
         {formatTime(timeLeft)}
       </div>
       
-      {/* Enhanced progress indicator */}
+      {/* progress indicator */}
       <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden shadow-inner">
         <div 
           className={`h-full transition-all duration-1000 ease-out bg-gradient-to-r ${getProgressColor()} relative overflow-hidden`}
@@ -60,7 +60,7 @@ export default function Timer({ duration, onExpire }) {
       </div>
       
       {/* Time status indicator */}
-      <div className={`w-2 h-2 rounded-full ${
+      <div className={`w-3 h-3 rounded-full ${
         timeLeft <= 300 ? 'bg-red-500 animate-pulse' :
         timeLeft <= 900 ? 'bg-orange-500' : 'bg-green-500'
       }`}></div>

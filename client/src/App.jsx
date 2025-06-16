@@ -1,6 +1,5 @@
 import CNLabWorkspace from './components/CNLabWorkspace';
 import './App.css';
-import 'monaco-editor/min/vs/editor/editor.main.css';
 
 const mockQuestion = {
   id: 'tcp-socket-programming',

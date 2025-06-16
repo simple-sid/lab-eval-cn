@@ -11,7 +11,13 @@ import {
   WrenchIcon
 } from '@heroicons/react/24/outline';
 
-export default function EditorTabs({ files, activeFileId, setActiveFileId }) {
+export default function EditorTabs({ 
+  files, 
+  activeFileId, 
+  setActiveFileId,
+  onCloseFile,
+  setFiles
+}) {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
 
@@ -39,7 +45,13 @@ export default function EditorTabs({ files, activeFileId, setActiveFileId }) {
   };
 
   const finishRename = () => {
-    // rename file later
+    if (editingId && editName.trim()) {
+      setFiles(prevFiles =>
+        prevFiles.map(f =>
+          f.id === editingId ? { ...f, name: editName.trim() } : f
+        )
+      );
+    }
     setEditingId(null);
     setEditName('');
   };
@@ -55,7 +67,9 @@ export default function EditorTabs({ files, activeFileId, setActiveFileId }) {
 
   const closeFile = (fileId, e) => {
     e.stopPropagation();
-    // later we have to remove file from files array
+    if (onCloseFile) {
+      onCloseFile(fileId);
+    }
     console.log('Close file:', fileId);
   };
 

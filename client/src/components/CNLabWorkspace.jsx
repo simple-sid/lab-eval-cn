@@ -45,19 +45,54 @@ export default function CNLabWorkspace({ question }) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   
   const [files, setFiles] = useState([
-    { 
-      id: 'server', 
-      name: 'server.py', 
-      code: '# Example server code\nprint("Hello from server!")',
-      language: 'python' 
-    },
-    { 
-      id: 'client', 
-      name: 'client.py', 
-      code: '# Example client code\nprint("Hello from client!")',
-      language: 'python' 
-    }
-  ]);
+  { 
+    id: 'server', 
+    name: 'server.py', 
+    code: `import socket
+
+HOST = 'localhost'
+PORT = 8080
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    s.bind((HOST, PORT))
+    s.listen()
+    print(f"[Server] Server started on {HOST}:{PORT}")
+    while True:
+        conn, addr = s.accept()
+        with conn:
+            print(f"[Conn] Connection from {addr}")
+            data = conn.recv(1024)
+            if not data:
+                break
+            print(f"[Recv] Received from {addr}: {data.decode()}")
+            response = f"Echo: {data.decode()}"
+            conn.sendall(response.encode())
+            print(f"[Send] Sent: {response}")
+            print(f"[Disc] Client {addr} disconnected")
+`,
+    language: 'python' 
+  },
+  { 
+    id: 'client', 
+    name: 'client.py', 
+    code: `import socket
+
+HOST = 'localhost'
+PORT = 8080
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    s.connect((HOST, PORT))
+    print(f"[Conn] Connected to server at {HOST}:{PORT}")
+    message = "Hello, Server!"
+    print(f"[Send] Sending: {message}")
+    s.sendall(message.encode())
+    data = s.recv(1024)
+    print(f"[Recv] Server response: {data.decode()}")
+    print(f"[Disc] Disconnected from server")
+`,
+    language: 'python' 
+  }
+]);
   
   const [activeFileId, setActiveFileId] = useState('server');
   const [isRunning, setIsRunning] = useState(false);
@@ -94,6 +129,16 @@ export default function CNLabWorkspace({ question }) {
     ]);
     setActiveFileId(newId);
   }, [language]);
+
+  const handleCloseFile = (fileId) => {
+    setFiles(prevFiles => prevFiles.filter(f => f.id !== fileId));
+    // set a new active file if the closed one was active
+    if (activeFileId === fileId && files.length > 1) {
+      const idx = files.findIndex(f => f.id === fileId);
+      const nextFile = files[idx + 1] || files[idx - 1];
+      setActiveFileId(nextFile?.id || null);
+    }
+  };
 
   // Handle execution
   const handleRun = useCallback(() => {
@@ -253,6 +298,7 @@ export default function CNLabWorkspace({ question }) {
                   language={language}
                   setLanguage={setLanguage}
                   files={files}
+                  setFiles={setFiles}
                   activeFileId={activeFileId}
                   setActiveFileId={setActiveFileId}
                   updateCode={updateCode}
@@ -265,6 +311,7 @@ export default function CNLabWorkspace({ question }) {
                   onToggleQuestion={() => setShowQuestion(true)}
                   showTerminal={showTerminal}
                   setShowTerminal={setShowTerminal}
+                  onCloseFile={handleCloseFile}
                 />
               </Panel>
             </PanelGroup>
