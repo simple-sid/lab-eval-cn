@@ -2,112 +2,165 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
-import { io } from "socket.io-client";
 
 function TerminalComponent({
   isVisible,
-  username,
-  password,
   terminalId,
   onSessionEnd,
   output,
   setOutput
 }) {
   const terminalRef = useRef(null);
-  const socketRef = useRef(null);
+  const wsRef = useRef(null);
   const xterm = useRef(null);
   const fitAddon = useRef(null);
   const sessionEnded = useRef(false);
 
-  // 1. Setup socket connection
+  const hardcodedJWT = 'FAKE_TEST_TOKEN'; // Replace with real JWT in production
+  const wsURL = `ws://localhost:5001/ws/ssh?token=${encodeURIComponent(hardcodedJWT)}&terminalId=${terminalId}`;
+
   useEffect(() => {
-    const socket = io("http://localhost:5001", {
-      query: { terminalId }
-    });
+    let isClosedManually = false;
+    let retryCount = 0;
+    const maxRetries = 5;
 
-    socketRef.current = socket;
+    const connectWebSocket = () => {
+      const ws = new WebSocket(wsURL);
+      wsRef.current = ws;
 
-    socket.emit("submit-credentials", {
-      terminalId,
-      username,
-      password
-    });
+      ws.onopen = () => {
+        console.log(`[WS] Connected to terminal ${terminalId}`);
+        retryCount = 0; // reset on success
+      };
 
-    socket.on(`ssh-data-${terminalId}`, (data) => {
-      if (xterm.current && typeof data === "string") {
-        xterm.current.write(data);
-      }
+      ws.onmessage = (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch (err) {
+          console.error("[WS] Failed to parse message:", event.data, err);
+          return;
+        }
 
-      // Store all SSH output as one string (scrollback preserved)
-      if (typeof setOutput === "function") {
-        setOutput((prev) => (typeof prev === "string" ? (prev + data).slice(-50000) : data));
-      }
-    });
+        if (!xterm.current) return;
 
-    socket.on("session-closed", () => {
-      sessionEnded.current = true;
-      if (xterm.current) {
-        xterm.current.writeln("\r\n*** SSH session ended ***");
-        xterm.current.blur();
-      }
-      onSessionEnd?.();
-    });
+        try {
+          if (msg.type === 'data') {
+            const data = msg.data;
+            xterm.current.write(data);
+            if (typeof setOutput === "function") {
+              setOutput(prev =>
+                typeof prev === "string" ? (prev + data).slice(-50000) : data
+              );
+            }
+          } else if (msg.type === 'end') {
+            sessionEnded.current = true;
+            xterm.current.writeln("\r\n*** SSH session ended ***");
+            xterm.current.blur();
+            onSessionEnd?.();
+          } else if (msg.type === 'error') {
+            xterm.current.writeln(`\r\n*** Error: ${msg.message} ***`);
+          }
+        } catch (err) {
+          console.error("[WS] Terminal message handling failed:", err);
+          xterm.current.writeln("\r\n*** Terminal error occurred ***");
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error(`[WS] Error on terminal ${terminalId}:`, err.message);
+      };
+
+      ws.onclose = () => {
+        if (!isClosedManually && retryCount < maxRetries && !sessionEnded.current) {
+          const delay = Math.min(1000 * 2 ** retryCount, 10000); // exponential backoff
+          console.warn(`[WS] Disconnected from ${terminalId}, retrying in ${delay}ms`);
+          xterm.current?.writeln(`\r\n*** Reconnecting in ${delay / 1000}s... ***`);
+          setTimeout(connectWebSocket, delay);
+          retryCount++;
+        } else {
+          console.log(`[WS] Gave up retrying for ${terminalId}`);
+        }
+      };
+    };
+
+    connectWebSocket();
 
     return () => {
-      socket.disconnect();
+      isClosedManually = true;
+      wsRef.current?.close();
     };
-  }, [terminalId, username, password]);
+  }, [terminalId]);
 
-  // 2. Setup terminal instance on visible
   useEffect(() => {
     if (!isVisible || !terminalRef.current) return;
 
-    // Dispose old terminal
-    if (xterm.current) {
-      xterm.current.dispose();
-    }
+    if (xterm.current) xterm.current.dispose();
 
-    const term = new Terminal({
-      cursorBlink: true,
-      scrollback: 1000,
-      convertEol: true
-    });
+    try {
+      const term = new Terminal({
+        cursorBlink: true,
+        scrollback: 1000,
+        convertEol: true
+      });
 
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(terminalRef.current);
-    fit.fit();
-
-    xterm.current = term;
-    fitAddon.current = fit;
-    
-    // Replay entire output as one stream (NOT line-by-line)
-    if (typeof output === "string") {
-      term.write(output);
-    }
-
-    // Handle user input
-    term.onData((data) => {
-      if (!sessionEnded.current) {
-        socketRef.current?.emit(`ssh-input-${terminalId}`, data);
-      }
-    });
-
-    // Handle window resize
-    const handleResize = () => {
+      const fit = new FitAddon();
+      term.loadAddon(fit);
+      term.open(terminalRef.current);
       fit.fit();
-      const { cols, rows } = term;
-      socketRef.current?.emit("resize", { cols, rows });
-    };
+      term.scrollToBottom();
 
-    window.addEventListener("resize", handleResize);
-    handleResize();
+      xterm.current = term;
+      fitAddon.current = fit;
 
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      term.dispose();
-      xterm.current = null;
-    };
+      if (typeof output === "string") {
+        term.write(output);
+      }
+
+      term.onData((data) => {
+        if (!sessionEnded.current) {
+          try {
+            wsRef.current?.send(
+              JSON.stringify({
+                type: 'input',
+                data,
+                terminalId
+              })
+            );
+          } catch (err) {
+            console.error("[WS] Failed to send input:", err);
+          }
+        }
+      });
+
+      const resizeObserver = new ResizeObserver(() => {
+        try {
+          fit.fit();
+          term.scrollToBottom();
+          const { cols, rows } = term;
+          wsRef.current?.send(
+            JSON.stringify({
+              type: 'resize',
+              terminalId,
+              cols,
+              rows
+            })
+          );
+        } catch (err) {
+          console.error("[ResizeObserver] Resize failed:", err);
+        }
+      });
+
+      resizeObserver.observe(terminalRef.current);
+
+      return () => {
+        resizeObserver.disconnect();
+        term.dispose();
+        xterm.current = null;
+      };
+    } catch (err) {
+      console.error("[Terminal] Failed to initialize terminal UI:", err);
+    }
   }, [isVisible]);
 
   return (

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import TerminalTabs from './TerminalTabs';
-import DummyLoginTerminal from "./DummyLoginTerminal";
-import TerminalComponent from "./Terminal";
+import TerminalComponent from './Terminal';
 import { v4 as uuidv4 } from 'uuid';
 import {
   CommandLineIcon,
@@ -11,26 +10,23 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function TerminalPane({ onClose }) {
+  const jwtToken = localStorage.getItem('jwt'); // assuming JWT is stored here
+
   const [terminals, setTerminals] = useState([
     {
       id: 'main',
       name: 'Main Terminal',
-      output: '', // changed from array to string
-      authenticated: false,
-      credentials: { username: '', password: '' }
+      output: ''
     }
   ]);
   const [activeTerminalId, setActiveTerminalId] = useState('main');
-  const [globalCredentials, setGlobalCredentials] = useState({ username: '', password: '' });
 
   const addTerminal = () => {
     const newId = uuidv4();
     const newTerminal = {
       id: newId,
       name: `Terminal ${terminals.length + 1}`,
-      output: '',
-      authenticated: true,
-      credentials: { ...globalCredentials }
+      output: ''
     };
     setTerminals(prev => [...prev, newTerminal]);
     setActiveTerminalId(newId);
@@ -53,53 +49,27 @@ export default function TerminalPane({ onClose }) {
 
   const activeTerminal = terminals.find(t => t.id === activeTerminalId) || terminals[0];
 
-  const handleLoginSuccess = (username, password) => {
-    setTerminals(prev =>
-      prev.map(t =>
-        t.id === activeTerminalId
-          ? {
-              ...t,
-              authenticated: true,
-              credentials: { username, password }
-            }
-          : t
-      )
-    );
-    setGlobalCredentials({ username, password });
-  };
+  const TerminalRender = terminals.map((term) => (
+    <TerminalComponent
+      key={term.id}
+      isVisible={term.id === activeTerminal.id}
+      terminalId={term.id}
+      token={jwtToken}
+      output={term.output}
+      setOutput={(newOutput) => {
+        setTerminals(prev =>
+          prev.map(t => {
+            if (t.id !== term.id) return t;
 
-  const TerminalRender =
-    activeTerminal.id === 'main' && !activeTerminal.authenticated ? (
-      <DummyLoginTerminal
-        terminalId="main"
-        onLoginSuccess={handleLoginSuccess}
-      />
-    ) : (
-      terminals.map((term) => (
-      <TerminalComponent
-        key={term.id}
-        isVisible={term.id === activeTerminal.id}
-        username={term.credentials.username}
-        password={term.credentials.password}
-        terminalId={term.id}
-        onSessionEnd={() => handleSessionEnd(term.id)}
-        output={term.output}
-        setOutput={(newOutput) => {
-          setTerminals(prev =>
-            prev.map(t => {
-              if (t.id !== term.id) return t;
+            const updatedOutput =
+              typeof newOutput === 'function' ? newOutput(t.output) : newOutput;
 
-              // Correctly apply function update or assign directly
-              const updatedOutput =
-                typeof newOutput === 'function' ? newOutput(t.output) : newOutput;
-
-              return { ...t, output: updatedOutput };
-            })
-          );
-        }}
-      />
-    ))
-    );
+            return { ...t, output: updatedOutput };
+          })
+        );
+      }}
+    />
+  ));
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
