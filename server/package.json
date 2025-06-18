@@ -17,12 +17,9 @@
     "dotenv": "^16.5.0",
     "dotenv-flow": "^4.1.0",
     "express": "^5.1.0",
-<<<<<<< HEAD
     "get-port": "^7.1.0",
     "mongoose": "^8.15.2",
-=======
     "nodemon": "^3.1.10",
->>>>>>> fcb2fa6 (committed stashed changes)
     "socket.io": "^4.8.1",
     "ssh2": "^1.16.0",
     "ws": "^8.18.2"

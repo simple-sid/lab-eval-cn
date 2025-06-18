@@ -2,23 +2,27 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
+import axios from 'axios';
 
-function TerminalComponent({
+const TerminalComponent = ({
   isVisible,
   terminalId,
   onSessionEnd,
-  output,
-  setOutput
-}) {
+  initialBuffer = [], 
+  onData,
+  token
+}) => {
   const terminalRef = useRef(null);
   const wsRef = useRef(null);
   const xterm = useRef(null);
   const fitAddon = useRef(null);
   const sessionEnded = useRef(false);
+  const bufferRef = useRef(''); // still used if ever
 
-  const hardcodedJWT = 'FAKE_TEST_TOKEN'; // Replace with real JWT in production
+  const hardcodedJWT = token || 'FAKE_TEST_TOKEN';
   const wsURL = `ws://localhost:5001/ws/ssh?token=${encodeURIComponent(hardcodedJWT)}&terminalId=${terminalId}`;
 
+  // WebSocket connection effect - independent of visibility
   useEffect(() => {
     let isClosedManually = false;
     let retryCount = 0;
@@ -30,7 +34,7 @@ function TerminalComponent({
 
       ws.onopen = () => {
         console.log(`[WS] Connected to terminal ${terminalId}`);
-        retryCount = 0; // reset on success
+        retryCount = 0;
       };
 
       ws.onmessage = (event) => {
@@ -42,17 +46,15 @@ function TerminalComponent({
           return;
         }
 
+        // Even if terminal is not visible, process message if xterm exists
         if (!xterm.current) return;
 
         try {
           if (msg.type === 'data') {
             const data = msg.data;
-            xterm.current.write(data);
-            if (typeof setOutput === "function") {
-              setOutput(prev =>
-                typeof prev === "string" ? (prev + data).slice(-50000) : data
-              );
-            }
+            // Always write data to the terminal buffer
+            xterm.current?.write(data);
+            onData?.(data);
           } else if (msg.type === 'end') {
             sessionEnded.current = true;
             xterm.current.writeln("\r\n*** SSH session ended ***");
@@ -63,19 +65,23 @@ function TerminalComponent({
           }
         } catch (err) {
           console.error("[WS] Terminal message handling failed:", err);
-          xterm.current.writeln("\r\n*** Terminal error occurred ***");
+          if (xterm.current) {
+            xterm.current.writeln("\r\n*** Terminal error occurred ***");
+          }
         }
       };
 
       ws.onerror = (err) => {
-        console.error(`[WS] Error on terminal ${terminalId}:`, err.message);
+        console.error("[WS] Error on terminal", terminalId, ":", err.message || "Unknown error");
       };
 
       ws.onclose = () => {
         if (!isClosedManually && retryCount < maxRetries && !sessionEnded.current) {
-          const delay = Math.min(1000 * 2 ** retryCount, 10000); // exponential backoff
+          const delay = Math.min(1000 * 2 ** retryCount, 10000);
           console.warn(`[WS] Disconnected from ${terminalId}, retrying in ${delay}ms`);
-          xterm.current?.writeln(`\r\n*** Reconnecting in ${delay / 1000}s... ***`);
+          if (xterm.current) {
+            xterm.current.writeln(`\r\n*** Reconnecting in ${delay / 1000}s... ***`);
+          }
           setTimeout(connectWebSocket, delay);
           retryCount++;
         } else {
@@ -90,77 +96,149 @@ function TerminalComponent({
       isClosedManually = true;
       wsRef.current?.close();
     };
-  }, [terminalId]);
+  }, [terminalId, wsURL, onSessionEnd]);
+
+  // Terminal UI effect - handles visibility changes
+  useEffect(() => {
+    if (!terminalRef.current) return;
+    
+    // If terminal exists but is invisible, just hide it - don't dispose it
+    if (!isVisible) {
+      if (terminalRef.current) {
+        terminalRef.current.style.display = 'none';
+      }
+      return;
+    }
+
+    if (terminalRef.current) {
+      terminalRef.current.style.display = 'block';
+    }
+    // Only create a new terminal if it doesn't exist
+    if (!xterm.current) {
+      try {
+        const term = new Terminal({
+          cursorBlink: true,
+          scrollback: 1000,
+          convertEol: true
+        });
+
+        const fit = new FitAddon();
+        term.loadAddon(fit);
+        term.open(terminalRef.current);
+        // Replay any stored output for this terminal
+        initialBuffer.forEach(chunk => term.write(chunk));
+        fit.fit();
+        term.scrollToBottom();
+        term.focus();
+
+        xterm.current = term;
+        fitAddon.current = fit;
+
+        // Attach input handler only for visible/active terminal
+        const onDataHandler = (data) => {
+          if (!sessionEnded.current && wsRef.current?.readyState === WebSocket.OPEN) {
+            try {
+              wsRef.current.send(
+                JSON.stringify({
+                  type: 'input',
+                  data,
+                  terminalId
+                })
+              );
+            } catch (err) {
+              console.error("[WS] Failed to send input:", err);
+            }
+          }
+        };
+        term.onData(onDataHandler);
+
+        // Observe container resize to auto-fit and keep cursor visible
+        if (terminalRef.current) {
+          const resizeObserver = new window.ResizeObserver(() => {
+            fit.fit();
+            term.scrollToBottom();
+          });
+          resizeObserver.observe(terminalRef.current);
+          terminalRef.current._resizeObserver = resizeObserver;
+        }
+      } catch (err) {
+        console.error("[Terminal] Failed to initialize terminal UI:", err);
+      }
+    } else if (isVisible) {
+      // Terminal became visible: refit, clear old wrapping, replay buffer, and scroll
+      xterm.current.focus();
+      fitAddon.current?.fit();
+      // Clear existing display and replay full buffer for correct wrapping
+      xterm.current.clear();
+      initialBuffer.forEach(chunk => xterm.current.write(chunk));
+      xterm.current.scrollToBottom();
+    }
+  }, [isVisible, terminalId]);
+  
+  // cleanup effect that runs on unmount only
+  useEffect(() => {
+    return () => {
+      if (xterm.current) {
+        xterm.current.dispose();
+        xterm.current = null;
+      }
+      if (terminalRef.current?._resizeObserver) {
+        terminalRef.current._resizeObserver.disconnect();
+      }
+    };
+  }, []);
 
   useEffect(() => {
-    if (!isVisible || !terminalRef.current) return;
+    const onRunFile = async (e) => {
+      // Only the visible terminal executes the run command
+      if (!isVisible) return;
+      const { code, filename, language } = e.detail;
+     // Save file before running
+     try {
+       await axios.post('http://localhost:5001/api/save-file', { filename, code });
+     } catch (err) {
+       xterm.current?.writeln(`\r\n*** Error saving file: ${err?.response?.data?.error || err.message} ***`);
+       return;
+     }
+     // Ensure WS is ready
+     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+       xterm.current?.writeln("\r\n*** Waiting for terminal connection... ***");
+       return;
+     }
+     const isServerFile = /bind\(|listen\(|accept\(/.test(code);
+     if (isServerFile) {
+       setTimeout(runFile, 200);
+     } else {
+       runFile();
+     }
+     function runFile() {
+       setTimeout(() => {
+         let runCmd = '';
+         if (language === 'python') {
+           runCmd = `python3 -u ${filename}`;
+         } else if (language === 'c') {
+           const exe = `${filename.replace('.c','')}`;
+           runCmd = `gcc ${filename} -o ${exe} && ./${exe}`;
+         }
+         // Chain evaluation: run code then protocol check
+         const evalCmd = `bash check_proto.sh 8080 ${filename} . t false`;
+         wsRef.current.send(JSON.stringify({ type: 'input', data: `${runCmd} && ${evalCmd}\n`, terminalId }));
+       }, 200);
+     }
+   };
+   window.addEventListener('run-file-in-terminal', onRunFile);
 
-    if (xterm.current) xterm.current.dispose();
+   const onStopAll = () => {
+     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+     const stopCmd = `killall -9 server client 2>/dev/null || true\n`;
+     wsRef.current.send(JSON.stringify({ type: 'input', data: stopCmd, terminalId }));
+   };  
+   window.addEventListener('stop-all-processes', onStopAll);
 
-    try {
-      const term = new Terminal({
-        cursorBlink: true,
-        scrollback: 1000,
-        convertEol: true
-      });
-
-      const fit = new FitAddon();
-      term.loadAddon(fit);
-      term.open(terminalRef.current);
-      fit.fit();
-      term.scrollToBottom();
-
-      xterm.current = term;
-      fitAddon.current = fit;
-
-      if (typeof output === "string") {
-        term.write(output);
-      }
-
-      term.onData((data) => {
-        if (!sessionEnded.current) {
-          try {
-            wsRef.current?.send(
-              JSON.stringify({
-                type: 'input',
-                data,
-                terminalId
-              })
-            );
-          } catch (err) {
-            console.error("[WS] Failed to send input:", err);
-          }
-        }
-      });
-
-      const resizeObserver = new ResizeObserver(() => {
-        try {
-          fit.fit();
-          term.scrollToBottom();
-          const { cols, rows } = term;
-          wsRef.current?.send(
-            JSON.stringify({
-              type: 'resize',
-              terminalId,
-              cols,
-              rows
-            })
-          );
-        } catch (err) {
-          console.error("[ResizeObserver] Resize failed:", err);
-        }
-      });
-
-      resizeObserver.observe(terminalRef.current);
-
-      return () => {
-        resizeObserver.disconnect();
-        term.dispose();
-        xterm.current = null;
-      };
-    } catch (err) {
-      console.error("[Terminal] Failed to initialize terminal UI:", err);
-    }
+    return () => {
+      window.removeEventListener('run-file-in-terminal', onRunFile);
+      window.removeEventListener('stop-all-processes', onStopAll);
+    };
   }, [isVisible]);
 
   return (
@@ -175,6 +253,6 @@ function TerminalComponent({
       }}
     />
   );
-}
+};
 
 export default TerminalComponent;

@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline';
 
 export default function TerminalTabs({ 
   terminals, 
   activeTerminalId, 
   setActiveTerminalId, 
   closeTerminal,
-  setTerminals
+  setTerminals,
+  addTerminal
 }) {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -79,7 +80,7 @@ export default function TerminalTabs({
                 e.stopPropagation();
                 closeTerminal(terminal.id);
               }}
-              className="ml-2 p-0.5 text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="ml-3 p-0.5 text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Close terminal"
             >
               <XMarkIcon className="w-3 h-3" />
@@ -87,6 +88,13 @@ export default function TerminalTabs({
           )}
         </div>
       ))}
+      <button
+        onClick={addTerminal}
+        className="p-2 ml-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+        title="New terminal"
+      >
+        <PlusIcon className="w-4 h-4" />
+      </button>
     </div>
   );
 }

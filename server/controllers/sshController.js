@@ -33,33 +33,46 @@ export function initSSHWebSocket(server) {
       const { containerName, sshPort, sessionId } = await ensureSessionContainer(userId);
 
       const conn = new Client();
-      conn
-        .on('ready', () => {
-          conn.shell((err, stream) => {
+      conn        .on('ready', () => {
+          // Request shell with explicit PTY for interactive programs
+          conn.shell({
+            term: 'xterm-256color',
+            cols: 80,
+            rows: 24,
+            width: 640,
+            height: 480
+          }, (err, stream) => {
             if (err) {
               return ws.send(JSON.stringify({ type: 'error', message: 'SSH Shell Error' }));
             }
 
             sessions[terminalId] = { conn, stream, ws };
-
             stream.on('data', (data) => {
               if (ws.readyState === ws.OPEN) {
-                ws.send(JSON.stringify({ type: 'data', data: data.toString() }));
+                // Ensure proper encoding and send raw data
+                const output = data.toString('utf8');
+                ws.send(JSON.stringify({ type: 'data', data: output }));
               }
             });
 
             stream.stderr?.on('data', (data) => {
               if (ws.readyState === ws.OPEN) {
-                ws.send(JSON.stringify({ type: 'data', data: data.toString() }));
+                // Send stderr data as well for complete output
+                const errorOutput = data.toString('utf8');
+                ws.send(JSON.stringify({ type: 'data', data: errorOutput }));
               }
-            });
-
-            ws.on('message', (message) => {
+            });            ws.on('message', (message) => {
               try {
                 const { type, data, cols, rows } = JSON.parse(message);
 
                 if (type === 'input') {
-                  stream.write(data);
+                  // Handle Ctrl+C properly by sending SIGINT
+                  if (data === '\u0003') { // Ctrl+C character
+                    stream.write(data);
+                    // Don't automatically kill other processes - let Ctrl+C handle it naturally
+                  } else {
+                    stream.write(data);
+                  }
                 } else if (type === 'resize') {
                   stream.setWindow(rows, cols, 600, 800);
                 }
@@ -104,6 +117,61 @@ export function initSSHWebSocket(server) {
   });
 }
 
+// Save file to user's container via SFTP
+export async function saveFileToContainer({ userId, filename, code }) {
+  const Session = (await import('../models/Session.js')).default;
+  const sessionDoc = await Session.findOne({ userId }).sort({ createdAt: -1 });
+  if (!sessionDoc) throw new Error('No active session for user');
+  const { sshPort } = sessionDoc;
+  console.log(`[SFTP] Attempting to connect to userId=${userId} on sshPort=${sshPort} for file ${filename}`);
+
+  return new Promise((resolve, reject) => {
+    const conn = new Client();
+    conn.on('ready', () => {
+      console.log('[SFTP] SSH connection ready');
+      conn.sftp((err, sftp) => {
+        if (err) {
+          console.error('[SFTP] SFTP error:', err);
+          conn.end();
+          return reject(err);
+        }
+        const remotePath = `/home/labuser/${filename}`;
+        console.log(`[SFTP] Writing to ${remotePath}`);
+        const writeStream = sftp.createWriteStream(remotePath, { encoding: 'utf8' });
+        writeStream.on('close', () => {
+          console.log('[SFTP] File write complete');
+          conn.end();
+          resolve();
+        });
+        writeStream.on('error', (err) => {
+          console.error('[SFTP] WriteStream error:', err);
+          conn.end();
+          reject(err);
+        });
+        writeStream.write(code);
+        writeStream.end();
+      });
+    })
+    .on('error', (err) => {
+      console.error('[SFTP] SSH connection error:', err);
+      reject(err);
+    })
+    .on('end', () => {
+      console.log('[SFTP] SSH connection ended');
+    })
+    .on('close', (hadError) => {
+      console.log(`[SFTP] SSH connection closed${hadError ? ' with error' : ''}`);
+    })
+    .connect({
+      host: '127.0.0.1',
+      port: sshPort,
+      username: 'labuser',
+      privateKey: fs.readFileSync('./labuser_key'),
+      readyTimeout: 10000
+    });
+  });
+}
+
 async function ensureSessionContainer(userId) {
   const { containerName, sshPort, sessionId } = await createContainerForUser(userId);
 
@@ -127,3 +195,28 @@ async function ensureSessionContainer(userId) {
 
   return { containerName, sshPort, sessionId };
 }
+
+// export async function runAndEvaluate({ userId, filename, code, port, path, protocol, autostart }) {
+//   // 1. sftp the file
+//   await saveFileToContainer({ userId, filename, code });
+
+//   // 2. find the container
+//   const { containerName } = await ensureSessionContainer(userId);
+
+//   // 3. exec inside the container
+//   const container = docker.getContainer(containerName);
+//   let runCmd;
+//   if (language === 'c') {
+//     const exe = filename.replace(/\.c$/, '');
+//     runCmd = `gcc ${filename} -o ${exe} && ./${exe}`;
+//   } else if (language === 'python') {
+//     runCmd = `python3 -u ${filename}`;
+//   } else {
+//     throw new Error('Unsupported language: ' + language);
+//   }
+//   const cmd = [
+//     'bash', '-lc',
+//     `${runCmd} \
+//       && bash /home/labuser/${filename%.*}/check_proto.sh ${port} ${filename} ${path} ${protocol} ${autostart}`
+//   ]
+// }

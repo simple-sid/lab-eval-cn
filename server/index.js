@@ -5,12 +5,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import apiRoutes from './routes/index.js';
 import { initSSHWebSocket } from './controllers/sshController.js';
-import { connectDB, disconnectDB } from './utils/db.js'; // ✅ Import the DB connection
+import { connectDB, disconnectDB } from './utils/db.js'; 
 
 dotenv.config();
 
 // Connect to MongoDB
-connectDB(); // ✅ Establish the connection before starting the server
+connectDB();
 
 const app = express();
 const server = http.createServer(app);
@@ -27,13 +27,13 @@ initSSHWebSocket(server);
 
 // Graceful shutdown handler for DB
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Caught SIGINT, shutting down...');
+  console.log('\nCaught SIGINT, shutting down...');
   await disconnectDB();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n🛑 Caught SIGTERM, shutting down...');
+  console.log('\nCaught SIGTERM, shutting down...');
   await disconnectDB();
   process.exit(0);
 });
@@ -41,5 +41,5 @@ process.on('SIGTERM', async () => {
 const PORT = process.env.PORT || 5001;
 
 server.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });

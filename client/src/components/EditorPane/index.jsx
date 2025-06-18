@@ -63,7 +63,7 @@ export default function EditorPane({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center space-x-3">
           <CodeBracketIcon className="w-5 h-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">Code Editor</h2>

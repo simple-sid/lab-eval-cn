@@ -1,4 +1,3 @@
-// docker/dockerManager.js
 import Docker from 'dockerode';
 import getPort from 'get-port';
 import dotenv from 'dotenv';
@@ -89,3 +88,5 @@ export async function createContainerForUser(userId) {
 
   return { containerName, volumeName, sshPort, sessionId };
 }
+
+export { docker };

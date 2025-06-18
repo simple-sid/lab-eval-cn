@@ -4,6 +4,11 @@ FROM ubuntu:22.04
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Set proper terminal environment for interactive programs
+ENV TERM=xterm-256color
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
 # Install tools
 RUN apt-get update && apt-get install -y \
     openssh-server \
@@ -14,9 +19,19 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     iputils-ping \
     net-tools \
+    tcpdump \
+    netcat \
+    traceroute \
+    nmap \
+    iproute2 \
+    telnet \
     vim \
+    nano \
     curl \
     bash \
+    psmisc \
+    lsof \
+    procps \
     && apt-get clean
 
 # Create SSH directory and user
@@ -41,12 +56,30 @@ RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/s
     sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config && \
     echo "AllowUsers labuser" >> /etc/ssh/sshd_config
 
+# Add SSH server configurations for proper PTY allocation and interactive support
+RUN echo "UsePAM yes" >> /etc/ssh/sshd_config && \
+    echo "AcceptEnv LANG LC_*" >> /etc/ssh/sshd_config && \
+    echo "TCPKeepAlive yes" >> /etc/ssh/sshd_config && \
+    echo "PermitTTY yes" >> /etc/ssh/sshd_config
+
 # Expose SSH port
 EXPOSE 22
 
-# Set shell to bash
+# Labuser can run commands with sudo without password, Set shell to bash
 RUN echo "labuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     chsh -s /bin/bash labuser
+
+# Set working directory to labuser home for proper execution environment
+WORKDIR /home/labuser
+USER labuser
+
+# Ensure proper shell initialization for interactive programs
+RUN echo 'export TERM=xterm-256color' >> ~/.bashrc && \
+    echo 'export LANG=C.UTF-8' >> ~/.bashrc && \
+    echo 'export LC_ALL=C.UTF-8' >> ~/.bashrc
+
+# Switch back to root for SSH daemon startup
+USER root
 
 # Start SSH daemon
 CMD ["/usr/sbin/sshd", "-D"]

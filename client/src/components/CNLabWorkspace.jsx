@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Panel, PanelGroup } from 'react-resizable-panels';
 import Header from './Header';
 import EditorPane from './EditorPane';
@@ -41,78 +41,34 @@ export default function CNLabWorkspace({ question }) {
   const [language, setLanguage] = useState('python');
   const [showQuestion, setShowQuestion] = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
-  const [terminalOutput, setTerminalOutput] = useState([]);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  // const [isSubmitted, setIsSubmitted] = useState(false);
   
-  const [files, setFiles] = useState([
-  { 
-    id: 'server', 
-    name: 'server.py', 
-    code: `import socket
-
-HOST = 'localhost'
-PORT = 8080
-
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind((HOST, PORT))
-    s.listen()
-    print(f"[Server] Server started on {HOST}:{PORT}")
-    while True:
-        conn, addr = s.accept()
-        with conn:
-            print(f"[Conn] Connection from {addr}")
-            data = conn.recv(1024)
-            if not data:
-                break
-            print(f"[Recv] Received from {addr}: {data.decode()}")
-            response = f"Echo: {data.decode()}"
-            conn.sendall(response.encode())
-            print(f"[Send] Sent: {response}")
-            print(f"[Disc] Client {addr} disconnected")
-`,
-    language: 'python' 
-  },
-  { 
-    id: 'client', 
-    name: 'client.py', 
-    code: `import socket
-
-HOST = 'localhost'
-PORT = 8080
-
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    print(f"[Conn] Connected to server at {HOST}:{PORT}")
-    message = "Hello, Server!"
-    print(f"[Send] Sending: {message}")
-    s.sendall(message.encode())
-    data = s.recv(1024)
-    print(f"[Recv] Server response: {data.decode()}")
-    print(f"[Disc] Disconnected from server")
-`,
-    language: 'python' 
-  }
-]);
+  const [files, setFiles] = useState([]);
+  useEffect(() => {
+    fetch('/codeFiles.json')
+      .then(res => res.json())
+      .then(data => setFiles(data))
+      .catch(err => console.error("Error loading files:", err));
+  }, []);
   
   const [activeFileId, setActiveFileId] = useState('server');
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Handle file operations
-  const updateCode = useCallback((newCode) => {
+  const updateCode = (newCode) => {
     setFiles(prevFiles => 
       prevFiles.map(f => 
         f.id === activeFileId ? {...f, code: newCode} : f
       )
     );
-  }, [activeFileId]);
+  };
 
-  const addNewFile = useCallback(() => {
+  const addNewFile = () => {
     const timestamp = Date.now();
     const newId = `file_${timestamp}`;
     const extension = language === 'python' ? 'py' : 
-                      language === 'javascript' ? 'js' : 
-                      language === 'java' ? 'java' : 'txt';
+                      language === 'c' ? 'c' : 'txt';
     
     const template = language === 'python' ? 
       `#!/usr/bin/env python3\n"""\nNew Python File\nAuthor: ${getCurrentUser()}\nCreated: ${getCurrentDateTime()} UTC\n"""\n\n# Your code here\n` :
@@ -128,7 +84,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
       }
     ]);
     setActiveFileId(newId);
-  }, [language]);
+  };
 
   const handleCloseFile = (fileId) => {
     setFiles(prevFiles => prevFiles.filter(f => f.id !== fileId));
@@ -138,84 +94,46 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
       const nextFile = files[idx + 1] || files[idx - 1];
       setActiveFileId(nextFile?.id || null);
     }
-  };
-
-  // Handle execution
-  const handleRun = useCallback(() => {
+  };  // Handle execution
+  const handleRun = () => {
     setIsRunning(true);
     setShowTerminal(true);
-    
     const activeFile = files.find(f => f.id === activeFileId);
-    
-    setTimeout(() => {
-      const simulatedOutput = [
-        `[Server] Running ${activeFile?.name || 'code'}...`,
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-        '',
-      ];
-
-      if (activeFile?.name === 'server.py') {
-        simulatedOutput.push(
-          '[Server] Server started on localhost:8080',
-          'Waiting for connections...',
-          '[Conn] Connection from (\'127.0.0.1\', 54321)',
-          '[Recv] Received from (\'127.0.0.1\', 54321): Hello, Server!',
-          '[Send] Sent: Echo: Hello, Server!',
-          '[Disc] Client (\'127.0.0.1\', 54321) disconnected'
-        );
-      } else if (activeFile?.name === 'client.py') {
-        simulatedOutput.push(
-          '[Conn] Connected to server at localhost:8080',
-          '[Send] Sending: Hello, Server!',
-          '[Recv] Server response: Echo: Hello, Server!',
-          '[Disc] Disconnected from server'
-        );
-      }
-
-      simulatedOutput.push(
-        '',
-        '[OK] Execution completed successfully',
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-      );
-
-      setTerminalOutput(prev => [...prev, ...simulatedOutput]);
+    if (!activeFile) {
+      window.dispatchEvent(new CustomEvent('terminal-error', { detail: "No file selected" }));
       setIsRunning(false);
-    }, 2000);
-  }, [activeFileId, files]);
-
-  const handleSubmit = useCallback(() => {
-    setIsSubmitting(true);
-    setShowTerminal(true);
-    
+      return;
+    }
+    // Delay event dispatch to ensure TerminalPane is mounted and listeners registered
     setTimeout(() => {
-      const submissionOutput = [
-        '[Send] Submitting solution...',
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-        '',
-        '[Test] Running test cases...',
-        '',
-        '[OK] Test 1: Basic Connection Test - PASSED (25 pts)',
-        '[OK] Test 2: Multiple Messages Test - PASSED (25 pts)', 
-        '[OK] Test 3: Disconnect Test - PASSED (25 pts)',
-        '[OK] Test 4: Multiple Clients Test - PASSED (25 pts)',
-        '',
-        '[Success] All tests passed! Score: 100/100',
-        '[OK] Solution submitted successfully',
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-      ];
+      window.dispatchEvent(new CustomEvent('run-file-in-terminal', {
+        detail: {
+          code: activeFile.code,
+          filename: activeFile.name,
+          language: activeFile.language || language
+        }
+      }));
+      setIsRunning(false);
+    }, 100);
+  };
 
-      setTerminalOutput(prev => [...prev, ...submissionOutput]);
-      setIsSubmitting(false);
-      setIsSubmitted(true);
-    }, 3000);
-  }, []);
+  // Handle stopping all processes
+  const handleStopAll = () => {
+    setShowTerminal(true);
+    window.dispatchEvent(new CustomEvent('stop-all-processes'));
+  };
+  const handleSubmit = () => {
+    // setIsSubmitting(true);
+    setShowTerminal(true);
 
-  const handleTimeUp = useCallback(() => {
+    handleRun();
+  };
+  const handleTimeUp = () => {
     if (!isSubmitted) {
       alert("[Time] Time's up! Your code will be automatically submitted.");
       handleSubmit();
     }
-  }, [handleSubmit, isSubmitted]);
+  };
 
   // Mobile layout
   if (isMobile) {
@@ -240,8 +158,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         <div className="flex-1 overflow-hidden">
           {activeTab === 'question' && (
             <QuestionPane question={question} />
-          )}
-          {activeTab === 'editor' && (
+          )}          {activeTab === 'editor' && (
             <EditorPane 
               language={language}
               setLanguage={setLanguage}
@@ -252,14 +169,14 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
               addNewFile={addNewFile}
               onRun={handleRun}
               onSubmit={handleSubmit}
+              onStopAll={handleStopAll}
               isRunning={isRunning}
               isSubmitting={isSubmitting}
             />
           )}
           {activeTab === 'terminal' && (
-            <TerminalPane 
-              output={terminalOutput}
-              onClear={() => setTerminalOutput([])}
+            <TerminalPane
+              onClose={() => setActiveTab('editor')}
             />
           )}
         </div>
@@ -293,7 +210,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                   <ResizeHandle />
                 </>
               )}
-              <Panel minSize={40} id="editor-panel" order={2}>
+              <Panel minSize={40} id="editor-panel" order={2}>                
                 <EditorPane 
                   language={language}
                   setLanguage={setLanguage}
@@ -305,6 +222,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                   addNewFile={addNewFile}
                   onRun={handleRun}
                   onSubmit={handleSubmit}
+                  onStopAll={handleStopAll}
                   isRunning={isRunning}
                   isSubmitting={isSubmitting}
                   showQuestion={showQuestion}
@@ -316,18 +234,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
               </Panel>
             </PanelGroup>
           </Panel>
-          {showTerminal && (
-            <>
-              <ResizeHandle orientation="horizontal" />
-              <Panel defaultSize={30} minSize={20} maxSize={100} id="terminal-panel" order={3}>
-                <TerminalPane 
-                  output={terminalOutput}
-                  onClose={() => setShowTerminal(false)}
-                  onClear={() => setTerminalOutput([])}
-                />
-              </Panel>
-            </>
-          )}
+          {/* Always render TerminalPane, but hide with CSS if not visible */}
+          <ResizeHandle orientation="horizontal" style={{ display: showTerminal ? undefined : 'none' }} />
+          <Panel defaultSize={30} minSize={20} maxSize={100} id="terminal-panel" order={3} style={{ display: showTerminal ? undefined : 'none' }}>
+            <TerminalPane 
+              onClose={() => setShowTerminal(false)}
+            />
+          </Panel>
         </PanelGroup>
       </div>
     </div>
