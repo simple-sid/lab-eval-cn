@@ -2,7 +2,7 @@
 
 # Usage: ./evaluate_server1.sh server.c <test_case_index>
 SERVER_SRC=$1
-PORT=8080
+PORT=8078
 EXEC=server_exec
 TIMEOUT=15
 

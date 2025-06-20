@@ -10,7 +10,7 @@ const testCaseSchema = new mongoose.Schema({
 const questionSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
-  image: { type: String }, // Optional image URL or path
+  image: { type: String }, // image URL or path
   precode: { type: mongoose.Schema.Types.Mixed }, // Object with starter code files
   clientPrecode: { type: mongoose.Schema.Types.Mixed },
   solution: { type: mongoose.Schema.Types.Mixed },

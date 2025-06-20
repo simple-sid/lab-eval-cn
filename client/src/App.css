@@ -77,6 +77,7 @@
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
 }
 
+/* Animations */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -99,45 +100,46 @@
   }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
+/* Page transitions */
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out;
 }
 
-.fade-in-up {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.slide-in-right {
-  animation: slideInRight 0.5s ease-out;
-}
-
-@keyframes shimmer {
+@keyframes fadeIn {
   0% {
-    background-position: -200px 0;
+    opacity: 0;
   }
   100% {
-    background-position: calc(200px + 100%) 0;
+    opacity: 1;
   }
 }
 
-.loading-shimmer {
-  background: linear-gradient(90deg, #f0f0f0 0px, #e0e0e0 40px, #f0f0f0 80px);
-  background-size: 200px;
-  animation: shimmer 1.5s infinite;
+/* Gradient text */
+.gradient-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #6366f1, #a855f7);
 }
 
-/* text selection */
-::selection {
-  background: rgba(102, 126, 234, 0.3);
-  color: #1f2937;
+/* Hover effects */
+.hover-lift {
+  transition: all 0.3s ease;
 }
 
-::-moz-selection {
-  background: rgba(102, 126, 234, 0.3);
-  color: #1f2937;
+.hover-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Card styles */
+.card {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }

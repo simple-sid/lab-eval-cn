@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import pingRoute from './ping.js';
+import questionsRoute from './questions.js';
 import { saveFileToContainer, runAndEvaluate } from '../controllers/sshController.js';
 
 const router = Router();
 
-// You can register multiple route files here
 router.use('/ping', pingRoute);
+router.use('/questions', questionsRoute);
 
 // Save file to container
 router.post('/save-file', async (req, res) => {
