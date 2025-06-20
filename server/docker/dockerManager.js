@@ -8,7 +8,7 @@ const docker = new Docker(); // Connects via Unix socket by default
 const SSH_IMAGE = process.env.SSH_IMAGE || 'lab_ssh_image';
 
 /**
- * Generates session ID like 20150616_FN or 2025_AN
+ * Generates session ID like 20150616_FN or 20250616_AN
  */
 function generateSessionId() {
   const now = new Date();

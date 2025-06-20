@@ -8,7 +8,7 @@ import {
   PlusIcon
 } from '@heroicons/react/24/outline';
 
-export default function TerminalPane({ onClose }) {
+export default function TerminalPane({ onClose, termVisible }) {
   const jwtToken = localStorage.getItem('jwt'); // assuming JWT is stored here
 
   const [terminals, setTerminals] = useState([
@@ -52,6 +52,7 @@ export default function TerminalPane({ onClose }) {
     <TerminalComponent
       key={term.id}
       isVisible={term.id === activeTerminalId}
+      isTermVisible= {termVisible}
       terminalId={term.id}
       initialBuffer={term.buffer}
       onData={chunk => updateBuffer(term.id, chunk)}
