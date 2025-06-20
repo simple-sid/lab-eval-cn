@@ -35,25 +35,94 @@ const getCurrentDateTime = () => {
   return now.toISOString().slice(0, 19).replace('T', ' ');
 };
 
-export default function CNLabWorkspace({ question }) {
+export default function CNLabWorkspace() {
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState('question');
-  const [language, setLanguage] = useState('python');
+  const [language, setLanguage] = useState('c');
   const [showQuestion, setShowQuestion] = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
+  const [currentWorkingDir, setCurrentWorkingDir] = useState(''); // Track current directory
   // const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Load questions from public/questionPool.json
+  const [questions, setQuestions] = useState([]);
+  useEffect(() => {
+    fetch('/questionPool.json')
+      .then(res => res.json())
+      .then(data => setQuestions(data))
+      .catch(err => console.error('Error loading questions:', err));
+  }, []);
+
+  const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   
   const [files, setFiles] = useState([]);
   useEffect(() => {
     fetch('/codeFiles.json')
       .then(res => res.json())
-      .then(data => setFiles(data))
+      .then(data => {
+        // Ensure each file has a .path property (default to name if not present)
+        setFiles(data.map(f => ({
+          ...f,
+          path: f.path || f.name // always set path
+        })));
+      })
       .catch(err => console.error("Error loading files:", err));
   }, []);
   
   const [activeFileId, setActiveFileId] = useState('server');
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testCaseResults, setTestCaseResults] = useState([]);
+
+  useEffect(() => {
+    const onEval = (e) => {
+      const { results } = e.detail || {};
+      const currentTestCases = questions[activeQuestionIdx]?.testCases || [];
+      // Merge each result into the corresponding test case
+      setTestCaseResults(
+        currentTestCases.map((tc, idx) => {
+          const result = results && results[idx] ? results[idx] : {};
+          return {
+            ...tc,
+            actualOutput: (result.stdout || '') + (result.stderr ? `\n${result.stderr}` : ''),
+            status: result.exitCode === 0 ? 'PASS' : 'FAIL',
+            exitCode: result.exitCode
+          };
+        })
+      );
+    };
+    window.addEventListener('evaluation-complete', onEval);
+    return () => window.removeEventListener('evaluation-complete', onEval);
+  }, [questions, activeQuestionIdx]);
+  
+  // Reset testCaseResults when switching questions
+  useEffect(() => {
+    setTestCaseResults([]);
+  }, [activeQuestionIdx]);
+  
+  // When questions or activeQuestionIdx changes, set files from solution
+  useEffect(() => {
+    if (questions && questions.length > 0 && questions[activeQuestionIdx] && questions[activeQuestionIdx].solution) {
+      const solution = questions[activeQuestionIdx].solution;
+      // Convert solution object to files array
+      const filesFromSolution = Object.entries(solution).map(([filename, code]) => {
+        let lang = 'plaintext';
+        if (filename.endsWith('.py')) lang = 'python';
+        else if (filename.endsWith('.c')) lang = 'c';
+        return {
+          id: filename.replace(/\.[^/.]+$/, ''),
+          name: filename.split('/').pop(), // just the filename
+          path: filename, // full relative path
+          language: lang,
+          code: code
+        };
+      });
+      setFiles(filesFromSolution);
+      if (filesFromSolution.length > 0) {
+        setActiveFileId(filesFromSolution[0].id);
+      }
+    }
+  }, [questions, activeQuestionIdx]);
 
   // Handle file operations
   const updateCode = (newCode) => {
@@ -67,18 +136,17 @@ export default function CNLabWorkspace({ question }) {
   const addNewFile = () => {
     const timestamp = Date.now();
     const newId = `file_${timestamp}`;
-    const extension = language === 'python' ? 'py' : 
-                      language === 'c' ? 'c' : 'txt';
-    
-    const template = language === 'python' ? 
-      `#!/usr/bin/env python3\n"""\nNew Python File\nAuthor: ${getCurrentUser()}\nCreated: ${getCurrentDateTime()} UTC\n"""\n\n# Your code here\n` :
+    const extension = language === 'c' ? 'c' :
+                      language === 'python' ? 'py' : 'txt';
+    const template = language === 'c' ? 
+      `"""\nNew C File\nAuthor: ${getCurrentUser()}\nCreated: ${getCurrentDateTime()} UTC\n"""\n\n# Your code here\n` :
       `// New ${language} file\n// Author: ${getCurrentUser()}\n// Created: ${getCurrentDateTime()} UTC\n\n`;
-    
     setFiles(prevFiles => [
       ...prevFiles, 
       {
         id: newId,
-        name: `new_file_${timestamp}.${extension}`,
+        name: `new_file_1.${extension}`,
+        path: `new_file_1.${extension}`,
         code: template,
         language
       }
@@ -104,12 +172,17 @@ export default function CNLabWorkspace({ question }) {
       setIsRunning(false);
       return;
     }
-    // Delay event dispatch to ensure TerminalPane is mounted and listeners registered
+    // If we're in a subdirectory, update the file's path to include the current directory
+    const fullPath = currentWorkingDir 
+      ? `${currentWorkingDir}/${activeFile.name}` 
+      : activeFile.path;
+    
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('run-file-in-terminal', {
         detail: {
           code: activeFile.code,
-          filename: activeFile.name,
+          filename: fullPath, // use full path including current directory
+          filePath: fullPath, // use full path including current directory
           language: activeFile.language || language
         }
       }));
@@ -129,22 +202,27 @@ export default function CNLabWorkspace({ question }) {
     handleRun();
   };
   const handleTimeUp = () => {
-    if (!isSubmitted) {
-      alert("[Time] Time's up! Your code will be automatically submitted.");
-      handleSubmit();
-    }
+    alert("[Time] Time's up! Your code will be automatically submitted.");
+    handleSubmit();
   };
+
+  const question = questions && questions.length > 0 ? questions[activeQuestionIdx] : undefined;
+
+  // Keep window.questions and window.activeQuestionIdx in sync for evaluation
+  useEffect(() => {
+    window.questions = questions;
+    window.activeQuestionIdx = activeQuestionIdx;
+  }, [questions, activeQuestionIdx]);
 
   // Mobile layout
   if (isMobile) {
     return (
       <div className="flex flex-col h-screen bg-gray-50">
-        <Header 
-          title={question.title}
-          timeLimit={question.timeLimit}
+        <Header
+          title={question ? question.title : 'No questions available'}
           onTimeUp={handleTimeUp}
+          timeLimit={question && question.timeLimit ? question.timeLimit : 3600}
         />
-        
         <MobileTabs
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -154,11 +232,16 @@ export default function CNLabWorkspace({ question }) {
             { id: 'terminal', label: 'Output', icon: null }
           ]}
         />
-        
         <div className="flex-1 overflow-hidden">
           {activeTab === 'question' && (
-            <QuestionPane question={question} />
-          )}          {activeTab === 'editor' && (
+            <QuestionPane 
+              questions={questions}
+              activeQuestionIdx={activeQuestionIdx}
+              setActiveQuestionIdx={setActiveQuestionIdx}
+              testCaseResults={testCaseResults}
+            />
+          )}
+          {activeTab === 'editor' && (
             <EditorPane 
               language={language}
               setLanguage={setLanguage}
@@ -187,10 +270,10 @@ export default function CNLabWorkspace({ question }) {
   // Desktop layout
   return (
     <div className="flex flex-col h-screen bg-white">
-      <Header 
-        title={question.title}
-        timeLimit={question.timeLimit} 
+      <Header
+        title={question ? question.title : 'No questions available'}
         onTimeUp={handleTimeUp}
+        timeLimit={question && question.timeLimit ? question.timeLimit : 3600}
         showQuestion={showQuestion}
         onToggleQuestion={() => setShowQuestion(!showQuestion)}
       />
@@ -203,8 +286,11 @@ export default function CNLabWorkspace({ question }) {
                 <>
                   <Panel defaultSize={35} minSize={25} maxSize={60} id="question-panel" order={1}>
                     <QuestionPane 
-                      question={question}
+                      questions={questions}
+                      activeQuestionIdx={activeQuestionIdx}
+                      setActiveQuestionIdx={setActiveQuestionIdx}
                       onClose={() => setShowQuestion(false)}
+                      testCaseResults={testCaseResults}
                     />
                   </Panel>
                   <ResizeHandle />
@@ -234,12 +320,10 @@ export default function CNLabWorkspace({ question }) {
               </Panel>
             </PanelGroup>
           </Panel>
-          {/* Always render TerminalPane, but hide with CSS if not visible */}
+          {/* Always render TerminalPane panel, but hide with CSS if not visible */}
           <ResizeHandle orientation="horizontal" style={{ display: showTerminal ? undefined : 'none' }} />
           <Panel defaultSize={30} minSize={20} maxSize={100} id="terminal-panel" order={3} style={{ display: showTerminal ? undefined : 'none' }}>
-            <TerminalPane 
-              onClose={() => setShowTerminal(false)}
-            />
+            <TerminalPane onClose={() => setShowTerminal(false)} />
           </Panel>
         </PanelGroup>
       </div>

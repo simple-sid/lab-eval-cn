@@ -48,7 +48,15 @@ export default function EditorTabs({
     if (editingId && editName.trim()) {
       setFiles(prevFiles =>
         prevFiles.map(f =>
-          f.id === editingId ? { ...f, name: editName.trim() } : f
+          f.id === editingId
+            ? {
+                ...f,
+                name: editName.trim(),
+                path: f.path
+                  ? f.path.split('/').slice(0, -1).concat(editName.trim()).join('/')
+                  : editName.trim()
+              }
+            : f
         )
       );
     }

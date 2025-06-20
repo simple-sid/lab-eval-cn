@@ -48,11 +48,8 @@ export default function EditorPane({
   };
 
   const languages = [
-    { value: 'python', label: 'Python', icon: <CodeBracketIcon className="w-4 h-4 text-green-600 inline" /> },
-    { value: 'javascript', label: 'JavaScript', icon: <CodeBracketIcon className="w-4 h-4 text-yellow-500 inline" /> },
-    { value: 'java', label: 'Java', icon: <BoltIcon className="w-4 h-4 text-orange-600 inline" /> },
-    { value: 'cpp', label: 'C++', icon: <BoltIcon className="w-4 h-4 text-blue-600 inline" /> },
-    { value: 'c', label: 'C', icon: <WrenchIcon className="w-4 h-4 text-gray-700 inline" /> }
+    { value: 'c', label: 'C', icon: <WrenchIcon className="w-4 h-4 text-gray-700 inline" /> },
+    { value: 'python', label: 'Python', icon: <CodeBracketIcon className="w-4 h-4 text-green-600 inline" /> }
   ];
 
   const themes = [

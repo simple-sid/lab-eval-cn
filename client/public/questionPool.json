@@ -1,0 +1,83 @@
+[
+    {
+        "id": "cn-q1",
+        "title": "Concurrent Date-Time Server",
+        "description": "Build a connection-oriented iterative server that sends the current date and time to each client. Extend the server to handle multiple clients concurrently using process-based forking.\n\nIn this lab, you will design a TCP server that listens for incoming client connections on a specified port. When a client connects, the server should fork a new process to handle the client, send the current system date and time, and then close the connection. The main server process should continue to accept new clients. This exercise will help you understand socket programming, process management, and concurrent server design in C.\n\nKey learning objectives:\n- Understand the basics of TCP socket programming in C\n- Learn how to use fork() to handle multiple clients concurrently\n- Practice sending and receiving data over sockets\n- Implement robust error handling for network programs\n\nTest your implementation by connecting multiple clients (e.g., using telnet or your own client program) and verifying that each receives the correct date and time.",
+        "precode": {
+            "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nvoid handle_client(int connfd);\n\nint main() {\n    // TODO: Create socket, bind, listen, accept connections, fork to handle clients\n    return 0;\n}\n\nvoid handle_client(int connfd) {\n    // TODO: Send current date and time to client\n}"
+        },
+        "clientPrecode": {
+            "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#define PORT 8080\n\nint main() {\n    // TODO: Connect to server, receive date-time string, print it\n    return 0;\n}"
+        },
+        "solution": {
+            "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <sys/types.h>\n#include <time.h>\n\n#define PORT 8080\n#define MAX_PENDING 5\n\nvoid handle_client(int connfd) {\n    time_t now = time(NULL);\n    char *dt = ctime(&now);\n    send(connfd, dt, strlen(dt), 0);\n    close(connfd);\n}\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd == -1) {\n        perror(\"socket failed\");\n        exit(1);\n    }\n\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    if (bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"bind failed\");\n        exit(1);\n    }\n\n    listen(sockfd, MAX_PENDING);\n    printf(\"Server listening on port %d...\\n\", PORT);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        if (connfd < 0) {\n            perror(\"accept failed\");\n            continue;\n        }\n\n        if (fork() == 0) {\n            close(sockfd);\n            handle_client(connfd);\n            exit(0);\n        } else {\n            close(connfd);\n        }\n    }\n\n    return 0;\n}",
+            "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n\n#define PORT 8080\n\nint main() {\n    int sockfd;\n    struct sockaddr_in servaddr;\n    char buffer[128];\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd < 0) {\n        perror(\"Socket creation failed\");\n        return 1;\n    }\n\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_port = htons(PORT);\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n\n    if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"Connection failed\");\n        return 1;\n    }\n\n    recv(sockfd, buffer, sizeof(buffer), 0);\n    printf(\"Server Time: %s\\n\", buffer);\n\n    close(sockfd);\n    return 0;\n}"
+        },
+        "clientSolution": {
+            "client.c": "// Working client code: connects to 127.0.0.1:8080 and prints the received string."
+        },
+        "testCases": [
+            {
+                "input": "Client connects to server",
+                "expectedOutput": "Date and time string (e.g., Wed Jun 19 22:10:00 2025)",
+                "description": "Server should send system date-time",
+                "points": 5
+            }
+        ],
+        "evaluationScript": "evaluate_server1.sh",
+        "image": "/public/multiple_clients.jpg"
+    },
+    {
+        "id": "cn-q2",
+        "title": "Arithmetic Chat Server",
+        "description": "Develop a client-server model where the client sends arithmetic expressions as strings, and the server parses and computes the result, then sends it back. Server should handle multiple clients using fork().\n\nIn this lab, you will implement a TCP server that listens for client connections and can handle multiple clients concurrently using fork(). Each client will send arithmetic expressions (like '3 + 4' or '12 / 6') as strings. The server should parse the expression, compute the result, and send it back to the client. If the input is invalid, the server should respond with an error message.\n\nKey learning objectives:\n- Practice parsing and evaluating arithmetic expressions in C\n- Use fork() to handle multiple clients concurrently\n- Implement robust error handling for invalid input\n- Deepen your understanding of client-server communication\n\nTest your implementation by sending various valid and invalid expressions from the client and verifying the server's responses.",
+        "precode": {
+            "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#define PORT 9090\n\nint evaluate(char *expr);\n\nint main() {\n    // TODO: Setup socket, accept connections, fork per client\n    return 0;\n}\n\nint evaluate(char *expr) {\n    // TODO: Parse and compute simple expressions like 3 + 4\n    return 0;\n}"
+        },
+        "clientPrecode": {
+            "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#define PORT 9090\n\nint main() {\n    // TODO: Connect to server, send expression, receive result\n    return 0;\n}"
+        },
+        "solution": {
+            "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <ctype.h>\n\n#define PORT 9090\n\nint evaluate(const char* expr) {\n    int a, b;\n    char op;\n    if (sscanf(expr, \"%d %c %d\", &a, &op, &b) != 3) return -99999;\n\n    switch (op) {\n        case '+': return a + b;\n        case '-': return a - b;\n        case '*': return a * b;\n        case '/': return b != 0 ? a / b : -99999;\n        default: return -99999;\n    }\n}\n\nvoid handle_client(int connfd) {\n    char buffer[256];\n    int n;\n    bzero(buffer, sizeof(buffer));\n\n    recv(connfd, buffer, sizeof(buffer), 0);\n    int result = evaluate(buffer);\n\n    if (result == -99999)\n        strcpy(buffer, \"Error\\n\");\n    else\n        sprintf(buffer, \"%d\\n\", result);\n\n    send(connfd, buffer, strlen(buffer), 0);\n    close(connfd);\n}\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));\n    listen(sockfd, 5);\n    printf(\"Arithmetic server running on port %d\\n\", PORT);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        if (fork() == 0) {\n            close(sockfd);\n            handle_client(connfd);\n            exit(0);\n        } else {\n            close(connfd);\n        }\n    }\n\n    return 0;\n}",
+            "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n\n#define PORT 9090\n\nint main() {\n    int sockfd;\n    struct sockaddr_in servaddr;\n    char buffer[256];\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_port = htons(PORT);\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n\n    if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"Connect failed\");\n        return 1;\n    }\n\n    printf(\"Enter expression (e.g., 3 + 4): \");\n    fgets(buffer, sizeof(buffer), stdin);\n\n    send(sockfd, buffer, strlen(buffer), 0);\n    bzero(buffer, sizeof(buffer));\n    recv(sockfd, buffer, sizeof(buffer), 0);\n\n    printf(\"Result from server: %s\\n\", buffer);\n    close(sockfd);\n    return 0;\n}"
+        },
+        "clientSolution": {
+            "client.c": "// Full working client code that connects to server, sends input like '2 + 3', and prints the result returned by the server."
+        },
+        "testCases": [
+            {
+            "input": "3 + 5",
+            "expectedOutput": "8",
+            "description": "Test basic addition",
+            "points": 2
+            },
+            {
+            "input": "12 - 7",
+            "expectedOutput": "5",
+            "description": "Test subtraction",
+            "points": 2
+            },
+            {
+            "input": "9 * 6",
+            "expectedOutput": "54",
+            "description": "Test multiplication",
+            "points": 2
+            },
+            {
+            "input": "100 / 5",
+            "expectedOutput": "20",
+            "description": "Test division",
+            "points": 2
+            },
+            {
+            "input": "abc + 4",
+            "expectedOutput": "Error or invalid input",
+            "description": "Handle malformed input gracefully",
+            "points": 2
+            }
+        ],
+        "evaluationScript": "evaluate_server2.sh",
+        "image": "/public/tcp_ladder_states.png"
+    }
+
+]

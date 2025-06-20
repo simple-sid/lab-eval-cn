@@ -17,7 +17,6 @@ const TerminalComponent = ({
   const xterm = useRef(null);
   const fitAddon = useRef(null);
   const sessionEnded = useRef(false);
-  const bufferRef = useRef(''); // still used if ever
 
   const hardcodedJWT = token || 'FAKE_TEST_TOKEN';
   const wsURL = `ws://localhost:5001/ws/ssh?token=${encodeURIComponent(hardcodedJWT)}&terminalId=${terminalId}`;
@@ -192,39 +191,48 @@ const TerminalComponent = ({
     const onRunFile = async (e) => {
       // Only the visible terminal executes the run command
       if (!isVisible) return;
-      const { code, filename, language } = e.detail;
-     // Save file before running
-     try {
-       await axios.post('http://localhost:5001/api/save-file', { filename, code });
-     } catch (err) {
-       xterm.current?.writeln(`\r\n*** Error saving file: ${err?.response?.data?.error || err.message} ***`);
-       return;
-     }
-     // Ensure WS is ready
-     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-       xterm.current?.writeln("\r\n*** Waiting for terminal connection... ***");
-       return;
-     }
-     const isServerFile = /bind\(|listen\(|accept\(/.test(code);
-     if (isServerFile) {
-       setTimeout(runFile, 200);
-     } else {
-       runFile();
-     }
-     function runFile() {
-       setTimeout(() => {
-         let runCmd = '';
-         if (language === 'python') {
-           runCmd = `python3 -u ${filename}`;
-         } else if (language === 'c') {
-           const exe = `${filename.replace('.c','')}`;
-           runCmd = `gcc ${filename} -o ${exe} && ./${exe}`;
-         }
-         // Chain evaluation: run code then protocol check
-         const evalCmd = `bash check_proto.sh 8080 ${filename} . t false`;
-         wsRef.current.send(JSON.stringify({ type: 'input', data: `${runCmd} && ${evalCmd}\n`, terminalId }));
-       }, 200);
-     }
+      const { code, filename, language, filePath } = e.detail;
+      
+      // Save file before running
+      try {
+        const savePayload = {
+          filename,
+          filePath: filePath || filename,
+          code
+        };
+        
+        const response = await axios.post('http://localhost:5001/api/save-file', savePayload);
+      } catch (err) {
+        console.error('[Terminal] Save error:', err);
+        xterm.current?.writeln(`\r\n*** Error saving file: ${err?.response?.data?.error || err.message} ***`);
+        return;
+      }
+      // Ensure WS is ready
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        xterm.current?.writeln("\r\n*** Waiting for terminal connection... ***");
+        return;
+      }
+      const isServerFile = /bind\(|listen\(|accept\(/.test(code);
+      if (isServerFile) {
+        setTimeout(runFile, 200);
+      } else {
+        runFile();
+      }
+      
+      function runFile() {
+        setTimeout(() => {
+          let runCmd = '';
+          const justFilename = filename;
+          
+          if (language === 'python') {
+            runCmd = `python3 -u ${justFilename}`;
+          } else if (language === 'c') {
+            const exe = justFilename.replace(/\.c$/, '');
+            runCmd = `gcc ${justFilename} -o ${exe} && ./${exe}`;
+          }
+          wsRef.current.send(JSON.stringify({ type: 'input', data: `${runCmd}\n`, terminalId }));
+        }, 200);
+      }
    };
    window.addEventListener('run-file-in-terminal', onRunFile);
 

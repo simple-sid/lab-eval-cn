@@ -4,9 +4,15 @@ import fs from 'fs';
 import url from 'url';
 import dotenv from 'dotenv';
 import Session from '../models/Session.js';
-import { createContainerForUser } from '../docker/dockerManager.js';
+import { createContainerForUser, docker } from '../docker/dockerManager.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+// Define __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const sessions = {}; // terminalId => { conn, stream, ws }
 
@@ -118,12 +124,13 @@ export function initSSHWebSocket(server) {
 }
 
 // Save file to user's container via SFTP
-export async function saveFileToContainer({ userId, filename, code }) {
+export async function saveFileToContainer({ userId, filename, filePath, code }) {
   const Session = (await import('../models/Session.js')).default;
   const sessionDoc = await Session.findOne({ userId }).sort({ createdAt: -1 });
   if (!sessionDoc) throw new Error('No active session for user');
   const { sshPort } = sessionDoc;
-  console.log(`[SFTP] Attempting to connect to userId=${userId} on sshPort=${sshPort} for file ${filename}`);
+  const relPath = filePath || filename;
+  console.log(`[SFTP] [DEBUG] Received: filename=${filename}, filePath=${filePath}, relPath=${relPath}`);
 
   return new Promise((resolve, reject) => {
     const conn = new Client();
@@ -135,21 +142,33 @@ export async function saveFileToContainer({ userId, filename, code }) {
           conn.end();
           return reject(err);
         }
-        const remotePath = `/home/labuser/${filename}`;
-        console.log(`[SFTP] Writing to ${remotePath}`);
-        const writeStream = sftp.createWriteStream(remotePath, { encoding: 'utf8' });
-        writeStream.on('close', () => {
-          console.log('[SFTP] File write complete');
-          conn.end();
-          resolve();
+        let remotePath = relPath.startsWith('/') ? relPath : `/home/labuser/${relPath}`;
+        console.log(`[SFTP] [DEBUG] Writing to ${remotePath}`);
+        // Ensure parent directories exist (mkdir -p equivalent)
+        const pathParts = remotePath.split('/').slice(0, -1);
+        let currentPath = '';
+        const mkdirRecursive = (idx) => {
+          if (idx >= pathParts.length) return Promise.resolve();
+          currentPath += (currentPath.endsWith('/') ? '' : '/') + pathParts[idx];
+          return new Promise((res) => {
+            sftp.mkdir(currentPath, { mode: 0o755 }, () => res());
+          }).then(() => mkdirRecursive(idx + 1));
+        };
+        mkdirRecursive(1).then(() => {
+          const writeStream = sftp.createWriteStream(remotePath, { encoding: 'utf8' });
+          writeStream.on('close', () => {
+            console.log('[SFTP] File write complete');
+            conn.end();
+            resolve();
+          });
+          writeStream.on('error', (err) => {
+            console.error('[SFTP] WriteStream error:', err);
+            conn.end();
+            reject(err);
+          });
+          writeStream.write(code);
+          writeStream.end();
         });
-        writeStream.on('error', (err) => {
-          console.error('[SFTP] WriteStream error:', err);
-          conn.end();
-          reject(err);
-        });
-        writeStream.write(code);
-        writeStream.end();
       });
     })
     .on('error', (err) => {
@@ -196,27 +215,104 @@ async function ensureSessionContainer(userId) {
   return { containerName, sshPort, sessionId };
 }
 
-// export async function runAndEvaluate({ userId, filename, code, port, path, protocol, autostart }) {
-//   // 1. sftp the file
-//   await saveFileToContainer({ userId, filename, code });
+/**
+ * Runs code and evaluation script inside user's container.
+ * Returns combined stdout, stderr and exit code.
+ */
+export async function runAndEvaluate({ userId, filename, code, evaluationScript, testCases }) {
+  // Determine relative directory and workingDir in container
+  const relDir = filename.includes('/') ? filename.split('/').slice(0, -1).join('/') : '';
+  const workingDir = relDir ? `/home/labuser/${relDir}` : '/home/labuser';
 
-//   // 2. find the container
-//   const { containerName } = await ensureSessionContainer(userId);
+  await saveFileToContainer({ userId, filename, filePath: filename, code });
 
-//   // 3. exec inside the container
-//   const container = docker.getContainer(containerName);
-//   let runCmd;
-//   if (language === 'c') {
-//     const exe = filename.replace(/\.c$/, '');
-//     runCmd = `gcc ${filename} -o ${exe} && ./${exe}`;
-//   } else if (language === 'python') {
-//     runCmd = `python3 -u ${filename}`;
-//   } else {
-//     throw new Error('Unsupported language: ' + language);
-//   }
-//   const cmd = [
-//     'bash', '-lc',
-//     `${runCmd} \
-//       && bash /home/labuser/${filename%.*}/check_proto.sh ${port} ${filename} ${path} ${protocol} ${autostart}`
-//   ]
-// }
+  const scriptName = evaluationScript || 'evaluate_server1.sh';
+  const scriptPath = path.resolve(__dirname, `../evaluation_scripts/${scriptName}`);
+  let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+  // Hidden directory in container
+  const hiddenEvalDir = '/tmp/.eval_scripts';
+  const destScriptPath = `${hiddenEvalDir}/${scriptName}`;
+
+  // Ensure hidden directory exists in container
+  const { containerName } = await ensureSessionContainer(userId);
+  const container = docker.getContainer(containerName);
+  await container.exec({ Cmd: ['bash','-lc', `mkdir -p ${hiddenEvalDir}`], AttachStdout: true, AttachStderr: true, WorkingDir: '/tmp' });
+
+  await saveFileToContainer({ userId, filename: scriptName, filePath: destScriptPath, code: scriptContent });
+
+  // ensure testCases is always an array
+  const safeTestCases = Array.isArray(testCases) ? testCases : [];
+
+  // Determine the correct script arguments
+  let scriptSourceFile = filename;
+  if (evaluationScript === 'evaluate_server2.sh') {
+    scriptSourceFile = 'server.c';
+  }
+
+  // Only run the first test case (or one iteration)
+  const results = [];
+  const i = 0;
+  const testCase = safeTestCases[0] || {};
+  // Pass test case index as argument
+  let execCmd;
+  if (evaluationScript === 'evaluate_server2.sh') {
+    execCmd = `cd ${workingDir} && chmod +x ${destScriptPath} && ${destScriptPath} ${scriptSourceFile} ${i}`;
+  } else {
+    execCmd = `cd ${workingDir} && chmod +x ${destScriptPath} && ${destScriptPath} ${scriptSourceFile}`;
+  }
+  console.log('[EVAL] Exec command:', execCmd);
+
+  const execInstance = await container.exec({ Cmd: ['bash','-lc', execCmd], AttachStdout: true, AttachStderr: true, WorkingDir: workingDir });
+  const stream = await execInstance.start();
+
+  let stdout = '', stderr = '';
+  stream.on('data', chunk => stdout += chunk.toString('utf8'));
+  stream.on('error', chunk => stderr += chunk.toString('utf8'));
+  await new Promise((resolve, reject) => {
+    stream.on('data', chunk => {
+      stdout += chunk.toString('utf8');
+      
+      console.log(`[EVAL][TestCase ${i}] Bash output chunk:`, chunk.toString('utf8'));
+    });
+    stream.on('error', chunk => {
+      stderr += chunk.toString('utf8');
+      console.log(`[EVAL][TestCase ${i}] Bash error chunk:`, chunk.toString('utf8'));
+    });
+    stream.on('end', resolve);
+    stream.on('error', reject);
+  });
+
+  const result = await execInstance.inspect();
+  const exitCode = result.ExitCode;
+
+  // Filter out non-essential bash debug lines
+  function filterOutput(output) {
+    if (!output) return '';
+    return output
+      .split('\n')
+      .filter(line => !/^\+ /.test(line) && !/^set -x/.test(line) && !/^\s*$/.test(line))
+      .join('\n')
+      .trim();
+  }
+
+  // Only show the first RESULT: line from output, or fallback to filtered output if not found
+  function extractResultLine(output) {
+    if (!output) return '';
+    const match = output.match(/^RESULT:.*$/m);
+    if (match && match[0]) return match[0];
+
+    return filterOutput(output);
+  }
+
+  results.push({
+    stdout: extractResultLine(stdout),
+    stderr: extractResultLine(stderr),
+    exitCode
+  });
+
+  // Cleanup: remove script and compiled binary
+  await container.exec({ Cmd: ['bash','-lc', `rm -f ${destScriptPath} ${workingDir}/server_exec ${workingDir}/${path.basename(filename)} ${workingDir}/server.log`], AttachStdout: true, AttachStderr: true, WorkingDir: '/tmp' });
+  await container.exec({ Cmd: ['bash','-lc', `rm -f ${destScriptPath}`], AttachStdout: true, AttachStderr: true, WorkingDir: '/tmp' });
+
+  return { results };
+}

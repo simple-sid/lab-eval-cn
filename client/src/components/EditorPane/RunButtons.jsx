@@ -7,6 +7,8 @@ import {
   CpuChipIcon,
   CommandLineIcon
 } from '@heroicons/react/24/outline';
+import axios from 'axios';
+import codeFiles from '../../../public/codeFiles.json';
 
 export default function RunButtons({ 
   onRun, 
@@ -61,6 +63,41 @@ export default function RunButtons({
               <span>Run</span>
             </>
           )}
+        </button>
+
+        {/* Evaluate button */}
+        <button
+          onClick={async () => {
+            try {
+              const questions = window.questions || [];
+              const activeQuestionIdx = window.activeQuestionIdx || 0;
+              const evaluationScript = questions[activeQuestionIdx]?.evaluationScript;
+              const testCases = questions[activeQuestionIdx]?.testCases || [];
+              await axios.post('http://localhost:5001/api/run-evaluate', {
+                filename: activeFile.path || activeFile.name,
+                code: activeFile.code,
+                language: activeFile.language,
+                evaluationScript,
+                testCases
+              }).then(resp => {
+                window.dispatchEvent(new CustomEvent('evaluation-complete', { detail: resp.data }));
+              });
+            } catch (err) {
+              console.error('Evaluate error', err);
+            }
+          }}
+          className={`
+            flex items-center space-x-2 px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-300 shadow-lg
+            ${isSubmitting
+              ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white cursor-not-allowed'
+              : !activeFile
+              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white hover:from-yellow-600 hover:to-orange-700 hover:shadow-xl hover:scale-105 active:scale-95'
+            }
+          `}
+          title="Evaluate Code"
+        >
+          <span>Evaluate</span>
         </button>
 
         {/* Submit button */}
