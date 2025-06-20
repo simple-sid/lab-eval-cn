@@ -16,7 +16,8 @@ export default function EditorTabs({
   activeFileId, 
   setActiveFileId,
   onCloseFile,
-  setFiles
+  setFiles,
+  onRenameFile
 }) {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -45,21 +46,8 @@ export default function EditorTabs({
   };
 
   const finishRename = () => {
-    if (editingId && editName.trim()) {
-      setFiles(prevFiles =>
-        prevFiles.map(f =>
-          f.id === editingId
-            ? {
-                ...f,
-                name: editName.trim(),
-                path: f.path
-                  ? f.path.split('/').slice(0, -1).concat(editName.trim()).join('/')
-                  : editName.trim()
-              }
-            : f
-        )
-      );
-    }
+    // Call the passed down rename handler
+    onRenameFile(editingId, editName.trim());
     setEditingId(null);
     setEditName('');
   };

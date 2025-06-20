@@ -28,7 +28,10 @@ export default function EditorPane({
   onToggleQuestion,
   showTerminal,
   setShowTerminal,
-  onCloseFile
+  onCloseFile,
+  saveStatus,
+  renameFile,
+  updateFileLanguage
 }) {
   const [fontSize, setFontSize] = useState(14);
   const [theme, setTheme] = useState('vs-dark');
@@ -64,6 +67,15 @@ export default function EditorPane({
         <div className="flex items-center space-x-3">
           <CodeBracketIcon className="w-5 h-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">Code Editor</h2>
+          {saveStatus === 'saving' && (
+            <span className="text-xs text-gray-500 ml-2">Saving...</span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="text-xs text-green-600 ml-2">Saved ✓</span>
+          )}
+          {saveStatus === 'idle' && (
+            <span className="text-xs text-green-600 ml-2">Saved ✓</span>
+          )}
           
           {!showQuestion && onToggleQuestion && (
             <button
@@ -78,8 +90,12 @@ export default function EditorPane({
 
         <div className="flex items-center space-x-2">
           <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
+            value={activeFile?.language || language}
+            onChange={(e) => {
+              const newLang = e.target.value;
+              updateFileLanguage(activeFile.id, newLang);
+              setLanguage(newLang);
+            }}
             className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {languages.map(lang => (
@@ -155,6 +171,7 @@ export default function EditorPane({
         setActiveFileId={setActiveFileId}
         onCloseFile={onCloseFile}
         setFiles={setFiles}
+        onRenameFile={renameFile}
       />
 
       {/* Editor */}

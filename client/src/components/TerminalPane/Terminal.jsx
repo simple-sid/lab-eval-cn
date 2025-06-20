@@ -6,6 +6,7 @@ import axios from 'axios';
 
 const TerminalComponent = ({
   isVisible,
+  isTermVisible,
   terminalId,
   onSessionEnd,
   initialBuffer = [], 
@@ -173,7 +174,7 @@ const TerminalComponent = ({
       xterm.current.scrollToBottom();
     }
   }, [isVisible, terminalId]);
-  
+
   // cleanup effect that runs on unmount only
   useEffect(() => {
     return () => {
@@ -248,6 +249,17 @@ const TerminalComponent = ({
       window.removeEventListener('stop-all-processes', onStopAll);
     };
   }, [isVisible]);
+
+  // Autofocus and refit when terminal becomes visible (e.g. from hidden state)
+  useEffect(() => {
+    if ((isTermVisible && isVisible) && xterm.current) {
+      setTimeout(() => {
+        fitAddon.current?.fit();
+        xterm.current.refresh(0, xterm.current.buffer.active.length - 1);
+        xterm.current.focus();
+      }, 100); // slight delay ensures DOM is painted
+    }
+  }, [isTermVisible]);
 
   return (
     <div

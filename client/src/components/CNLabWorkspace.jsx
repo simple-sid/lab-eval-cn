@@ -42,6 +42,7 @@ export default function CNLabWorkspace() {
   const [showQuestion, setShowQuestion] = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
   const [currentWorkingDir, setCurrentWorkingDir] = useState(''); // Track current directory
+  const [saveStatus, setSaveStatus] = useState('idle'); //track autosave status
   // const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Load questions from public/questionPool.json
@@ -133,6 +134,18 @@ export default function CNLabWorkspace() {
     );
   };
 
+  //track changes and auto-save
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const activeFile = files.find(f => f.id === activeFileId);
+      if (activeFile && activeFile.code?.trim()) {
+        saveFile(activeFile);
+      }
+    }, 1000); // Debounce: wait 1 second after user stops typing
+
+    return () => clearTimeout(timeoutId);
+  }, [files, activeFileId]);
+
   const addNewFile = () => {
     const timestamp = Date.now();
     const newId = `file_${timestamp}`;
@@ -188,6 +201,78 @@ export default function CNLabWorkspace() {
       }));
       setIsRunning(false);
     }, 100);
+  };
+
+  const saveFile = async (file) => {
+    if (!file) return;
+    try {
+      setSaveStatus('saving');
+      const payload = {
+        //userId: 'jwt-later',
+        filename: file.name,
+        filePath: file.path,
+        code: file.code
+      };
+
+      await fetch('http://localhost:5001/api/save-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000); // Reset to idle after 2 seconds
+    } catch (err) {
+      console.error(`[AutoSave] Failed to save ${file.path}:`, err);
+      setSaveStatus('idle');
+    }
+  };
+
+  //handle rename and code language change
+  const renameFile = (fileId, newName) => {
+    const extension = newName.split('.').pop().toLowerCase();
+
+    let detectedLanguage = 'plaintext';
+    if (extension === 'py') detectedLanguage = 'python';
+    else if (extension === 'c') detectedLanguage = 'c';
+
+    setFiles(prevFiles =>
+      prevFiles.map(f =>
+        f.id === fileId
+          ? {
+              ...f,
+              name: newName,
+              path: f.path
+                ? f.path.split('/').slice(0, -1).concat(newName).join('/')
+                : newName,
+              language: detectedLanguage //update language too
+            }
+          : f
+      )
+    );
+
+    setLanguage(detectedLanguage);
+  };
+
+  const updateFileLanguage = (fileId, newLang) => {
+    const newExt = newLang === 'c' ? 'c' : newLang === 'python' ? 'py' : '';
+    setFiles(prevFiles =>
+      prevFiles.map(f => {
+        if (f.id === fileId) {
+          const baseName = f.name.replace(/\.[^/.]+$/, ''); // remove old extension
+          const newName = `${baseName}.${newExt}`;
+          return {
+            ...f,
+            language: newLang,
+            name: newName,
+            path: f.path
+              ? f.path.split('/').slice(0, -1).concat(newName).join('/')
+              : newName
+          };
+        }
+        return f;
+      })
+    );
   };
 
   // Handle stopping all processes
@@ -255,6 +340,9 @@ export default function CNLabWorkspace() {
               onStopAll={handleStopAll}
               isRunning={isRunning}
               isSubmitting={isSubmitting}
+              saveStatus={saveStatus}
+              renameFile={renameFile}
+              updateFileLanguage={updateFileLanguage}
             />
           )}
           {activeTab === 'terminal' && (
@@ -316,6 +404,9 @@ export default function CNLabWorkspace() {
                   showTerminal={showTerminal}
                   setShowTerminal={setShowTerminal}
                   onCloseFile={handleCloseFile}
+                  saveStatus={saveStatus}
+                  renameFile={renameFile}
+                  updateFileLanguage={updateFileLanguage}
                 />
               </Panel>
             </PanelGroup>
@@ -323,7 +414,7 @@ export default function CNLabWorkspace() {
           {/* Always render TerminalPane panel, but hide with CSS if not visible */}
           <ResizeHandle orientation="horizontal" style={{ display: showTerminal ? undefined : 'none' }} />
           <Panel defaultSize={30} minSize={20} maxSize={100} id="terminal-panel" order={3} style={{ display: showTerminal ? undefined : 'none' }}>
-            <TerminalPane onClose={() => setShowTerminal(false)} />
+            <TerminalPane onClose={() => setShowTerminal(false)} termVisible={showTerminal} />
           </Panel>
         </PanelGroup>
       </div>
