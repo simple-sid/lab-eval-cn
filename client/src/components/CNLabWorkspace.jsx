@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Panel, PanelGroup } from 'react-resizable-panels';
 import Header from './Header';
 import EditorPane from './EditorPane';
@@ -43,6 +43,7 @@ export default function CNLabWorkspace() {
   const [showTerminal, setShowTerminal] = useState(false);
   const [currentWorkingDir, setCurrentWorkingDir] = useState(''); // Track current directory
   const [saveStatus, setSaveStatus] = useState('idle'); //track autosave status
+  const panelRef = useRef(null);
   // const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Load questions from public/questionPool.json
@@ -299,6 +300,17 @@ export default function CNLabWorkspace() {
     window.activeQuestionIdx = activeQuestionIdx;
   }, [questions, activeQuestionIdx]);
 
+  //handle resize for terminal open and close
+  useEffect(() => {
+    if (panelRef.current) {
+      if (showTerminal) {
+        panelRef.current.resize(45); // Show with size 45%
+      } else {
+        panelRef.current.resize(0); // Collapse to 0%
+      }
+    }
+  }, [showTerminal]);
+
   // Mobile layout
   if (isMobile) {
     return (
@@ -413,7 +425,14 @@ export default function CNLabWorkspace() {
           </Panel>
           {/* Always render TerminalPane panel, but hide with CSS if not visible */}
           <ResizeHandle orientation="horizontal" style={{ display: showTerminal ? undefined : 'none' }} />
-          <Panel defaultSize={30} minSize={20} maxSize={100} id="terminal-panel" order={3} style={{ display: showTerminal ? undefined : 'none' }}>
+          <Panel
+            ref={panelRef}
+            defaultSize={45}
+            minSize={0}
+            maxSize={100}
+            id="terminal-panel"
+            order={3}
+          >
             <TerminalPane onClose={() => setShowTerminal(false)} termVisible={showTerminal} />
           </Panel>
         </PanelGroup>

@@ -82,8 +82,13 @@ const TerminalComponent = ({
           if (xterm.current) {
             xterm.current.writeln(`\r\n*** Reconnecting in ${delay / 1000}s... ***`);
           }
-          setTimeout(connectWebSocket, delay);
           retryCount++;
+          setTimeout(connectWebSocket, delay);
+        } else if (!sessionEnded.current) {
+          if (xterm.current) {
+            xterm.current.writeln("\r\n*** Still waiting for server, retrying anyway... ***");
+          }
+          setTimeout(connectWebSocket, 3000); // ← Force reconnect even after maxRetries
         } else {
           console.log(`[WS] Gave up retrying for ${terminalId}`);
         }

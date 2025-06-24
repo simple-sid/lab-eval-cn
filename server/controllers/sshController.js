@@ -116,7 +116,17 @@ export function initSSHWebSocket(server) {
           privateKey: fs.readFileSync('./labuser_key')
         });
 
-    } catch (err) {
+    }catch(err){
+      if (
+        err.message &&
+        err.message.includes('Conflict') &&
+        err.message.includes('is already in use by container')
+      ) {
+        console.warn('[SSH WS] Container name conflict — continuing as it is likely already running.');
+        // Skip sending error to frontend; allow frontend to retry
+        return;
+      }
+
       console.error('[SSH WS] Failed to init session:', err.message);
       ws.send(JSON.stringify({ type: 'error', message: 'Failed to start lab session' }));
     }
@@ -132,63 +142,85 @@ export async function saveFileToContainer({ userId, filename, filePath, code }) 
   const relPath = filePath || filename;
   console.log(`[SFTP] [DEBUG] Received: filename=${filename}, filePath=${filePath}, relPath=${relPath}`);
 
-  return new Promise((resolve, reject) => {
-    const conn = new Client();
-    conn.on('ready', () => {
-      console.log('[SFTP] SSH connection ready');
-      conn.sftp((err, sftp) => {
-        if (err) {
-          console.error('[SFTP] SFTP error:', err);
-          conn.end();
-          return reject(err);
-        }
-        let remotePath = relPath.startsWith('/') ? relPath : `/home/labuser/${relPath}`;
-        console.log(`[SFTP] [DEBUG] Writing to ${remotePath}`);
-        // Ensure parent directories exist (mkdir -p equivalent)
-        const pathParts = remotePath.split('/').slice(0, -1);
-        let currentPath = '';
-        const mkdirRecursive = (idx) => {
-          if (idx >= pathParts.length) return Promise.resolve();
-          currentPath += (currentPath.endsWith('/') ? '' : '/') + pathParts[idx];
-          return new Promise((res) => {
-            sftp.mkdir(currentPath, { mode: 0o755 }, () => res());
-          }).then(() => mkdirRecursive(idx + 1));
-        };
-        mkdirRecursive(1).then(() => {
-          const writeStream = sftp.createWriteStream(remotePath, { encoding: 'utf8' });
-          writeStream.on('close', () => {
-            console.log('[SFTP] File write complete');
+  const maxRetries = 5;
+  const retryDelay = 1000;
+
+  const attemptConnection = (retryCount = 0) => {
+    return new Promise((resolve, reject) => {
+      const conn = new Client();
+
+      conn.on('ready', () => {
+        console.log('[SFTP] SSH connection ready');
+        conn.sftp((err, sftp) => {
+          if (err) {
+            console.error('[SFTP] SFTP error:', err);
             conn.end();
-            resolve();
+            return reject(err);
+          }
+
+          let remotePath = relPath.startsWith('/') ? relPath : `/home/labuser/${relPath}`;
+          console.log(`[SFTP] [DEBUG] Writing to ${remotePath}`);
+
+          // Ensure parent directories exist
+          const pathParts = remotePath.split('/').slice(0, -1);
+          let currentPath = '';
+          const mkdirRecursive = (idx) => {
+            if (idx >= pathParts.length) return Promise.resolve();
+            currentPath += (currentPath.endsWith('/') ? '' : '/') + pathParts[idx];
+            return new Promise((res) => {
+              sftp.mkdir(currentPath, { mode: 0o755 }, () => res());
+            }).then(() => mkdirRecursive(idx + 1));
+          };
+
+          mkdirRecursive(1).then(() => {
+            const writeStream = sftp.createWriteStream(remotePath, { encoding: 'utf8' });
+            writeStream.on('close', () => {
+              console.log('[SFTP] File write complete');
+              conn.end();
+              resolve();
+            });
+            writeStream.on('error', (err) => {
+              console.error('[SFTP] WriteStream error:', err);
+              conn.end();
+              reject(err);
+            });
+            writeStream.write(code);
+            writeStream.end();
           });
-          writeStream.on('error', (err) => {
-            console.error('[SFTP] WriteStream error:', err);
-            conn.end();
-            reject(err);
-          });
-          writeStream.write(code);
-          writeStream.end();
         });
       });
-    })
-    .on('error', (err) => {
-      console.error('[SFTP] SSH connection error:', err);
-      reject(err);
-    })
-    .on('end', () => {
-      console.log('[SFTP] SSH connection ended');
-    })
-    .on('close', (hadError) => {
-      console.log(`[SFTP] SSH connection closed${hadError ? ' with error' : ''}`);
-    })
-    .connect({
-      host: '127.0.0.1',
-      port: sshPort,
-      username: 'labuser',
-      privateKey: fs.readFileSync('./labuser_key'),
-      readyTimeout: 10000
+
+      conn.on('error', (err) => {
+        conn.end();
+        if (err.code === 'ECONNREFUSED' && retryCount < maxRetries) {
+          console.warn(`[SFTP] SSH ECONNREFUSED on port ${sshPort}. Retrying (${retryCount + 1}/${maxRetries})...`);
+          return setTimeout(() => {
+            attemptConnection(retryCount + 1).then(resolve).catch(reject);
+          }, retryDelay);
+        }
+        console.error('[SFTP] SSH connection error:', err);
+        reject(err);
+      });
+
+      conn.on('end', () => {
+        console.log('[SFTP] SSH connection ended');
+      });
+
+      conn.on('close', (hadError) => {
+        console.log(`[SFTP] SSH connection closed${hadError ? ' with error' : ''}`);
+      });
+
+      conn.connect({
+        host: '127.0.0.1',
+        port: sshPort,
+        username: 'labuser',
+        privateKey: fs.readFileSync('./labuser_key'),
+        readyTimeout: 10000
+      });
     });
-  });
+  };
+
+  return attemptConnection();
 }
 
 async function ensureSessionContainer(userId) {
@@ -205,7 +237,7 @@ async function ensureSessionContainer(userId) {
       activeSockets: [],
     });
     console.log(`[Session DB] Created new session for ${userId} @ ${sessionId}`);
-  } else if (sessionDoc.containerName !== containerName) {
+  } else if ((sessionDoc.containerName !== containerName) || (sessionDoc.sshPort !== sshPort)) {
     sessionDoc.containerName = containerName;
     sessionDoc.sshPort = sshPort;
     await sessionDoc.save();
