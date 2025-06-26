@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { 
   PlayIcon,
   InformationCircleIcon
@@ -6,6 +6,13 @@ import {
 
 export default function TestCases({ testCases = [], testCaseResults = [] }) {
   const [expandedTests, setExpandedTests] = useState(new Set([0])); // first test expanded by default
+
+  console.log('TestCases props:', { 
+    testCases, 
+    testCaseResults,
+    testCasesLength: testCases.length,
+    testCaseResultsLength: testCaseResults.length 
+  });
 
   const toggleExpanded = (index) => {
     const newExpanded = new Set(expandedTests);

@@ -1,0 +1,45 @@
+{
+  "testCases": [
+    {
+      "protocol": "tcp",
+      "input": "010101",
+      "expectedOutput": "010101",
+      "matchType": "exact",
+      "clientCount": 5
+    },
+    {
+      "protocol": "udp",
+      "input": "ping",
+      "expectedOutput": "pong",
+      "matchType": "contains",
+      "clientCount": 3
+    },
+    {
+      "chatroom": true,
+      "chatMessages": ["msg1", "msg2", "msg3"]
+    },
+    {
+      "stopAndWait": true,
+      "packets": ["pkt1", "pkt2", "pkt3"],
+      "acksExpected": ["ACK1", "ACK2", "ACK3"],
+      "matchType": "exact"
+    },
+    {
+      "multiStep": true,
+      "steps": [
+        {"input": "HELLO", "expectedOutput": "WORLD", "matchType": "exact"},
+        {"input": "BYE", "expectedOutput": "SEE YOU", "matchType": "contains"}
+      ]
+    },
+    {
+      "protocol": "tcp",
+      "input": "heartbeat",
+      "expectedOutput": "ok",
+      "matchType": "contains",
+      "periodicSend": true,
+      "steps": [
+        {"input": "heartbeat", "expectedOutput": "ok", "interval": 1, "count": 3}
+      ]
+    }
+  ]
+}
