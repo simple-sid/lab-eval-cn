@@ -112,6 +112,7 @@ const TerminalComponent = ({
               // Just drop everything, including 'pwd' and its result
               xterm.current?.write('\r');
               onData?.('\r');
+              console.log('carr return is Sup')
               return;
             }
 
@@ -257,6 +258,12 @@ const TerminalComponent = ({
       fitAddon.current?.fit();
       // Clear existing display and replay full buffer for correct wrapping
       xterm.current.clear();
+      if (initialBuffer.length > 0) {
+        const lastChunk = initialBuffer[initialBuffer.length - 1];
+        if (lastChunk.endsWith('\r')) {
+          initialBuffer[initialBuffer.length - 1] = lastChunk.slice(0, -1);
+        }
+      }
       initialBuffer.forEach(chunk => xterm.current.write(chunk));
       xterm.current.scrollToBottom();
       requestCurrentWorkingDir(); // Track working dir
@@ -365,7 +372,7 @@ const TerminalComponent = ({
     if ((isTermVisible && isVisible) && wsRef.current?.readyState === WebSocket.OPEN) {
       setTimeout(() => {
         requestCurrentWorkingDir();
-      }, 100); // small delay to ensure shell readiness
+      }, 50); // small delay to ensure shell readiness
     }
 
     // Delay user input by 100ms
@@ -373,6 +380,18 @@ const TerminalComponent = ({
     setTimeout(() => {
       inputReadyRef.current = true;
     }, 500);
+
+    if ((isTermVisible && isVisible) && xterm.current) {
+      setTimeout(() => {
+        const cursorX = xterm.current.buffer.active.cursorX;
+
+        // ⚠️ Carriage return bug fix: if cursor is at column 0, move to prompt length
+        if (cursorX === 0) {
+          const promptLength = 24; // Estimate or make dynamic
+          xterm.current.write(`\x1b[${promptLength}C`);
+        }
+      }, 100); // slight delay ensures DOM is painted
+    }
   }, [isTermVisible, isVisible]);
 
   return (
