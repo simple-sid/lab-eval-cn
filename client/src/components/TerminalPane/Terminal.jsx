@@ -112,7 +112,6 @@ const TerminalComponent = ({
               // Just drop everything, including 'pwd' and its result
               xterm.current?.write('\r');
               onData?.('\r');
-              console.log('carr return is Sup')
               return;
             }
 
@@ -267,8 +266,25 @@ const TerminalComponent = ({
       initialBuffer.forEach(chunk => xterm.current.write(chunk));
       xterm.current.scrollToBottom();
       requestCurrentWorkingDir(); // Track working dir
+    } 
+    
+    if ((isTermVisible && isVisible) && xterm.current) {
+      setTimeout(() => {
+        const buffer = xterm.current.buffer.active;
+        const cursorY = buffer.cursorY;
+
+        const line = buffer.getLine(cursorY);
+        if (line) {
+          const lineContent = line.translateToString(true); // true = trimRight
+          const visibleLength = lineContent.length;
+
+          if (buffer.cursorX === 0 && visibleLength > 0) {
+            xterm.current.write(`\x1b[${visibleLength}C`); // Move cursor forward
+          }
+        }
+      }, 100); // slight delay ensures DOM is painted
     }
-  }, [isVisible, terminalId]);
+  }, [isVisible, terminalId,isTermVisible]);
 
   // cleanup effect that runs on unmount only
   useEffect(() => {
@@ -380,18 +396,6 @@ const TerminalComponent = ({
     setTimeout(() => {
       inputReadyRef.current = true;
     }, 500);
-
-    if ((isTermVisible && isVisible) && xterm.current) {
-      setTimeout(() => {
-        const cursorX = xterm.current.buffer.active.cursorX;
-
-        // ⚠️ Carriage return bug fix: if cursor is at column 0, move to prompt length
-        if (cursorX === 0) {
-          const promptLength = 24; // Estimate or make dynamic
-          xterm.current.write(`\x1b[${promptLength}C`);
-        }
-      }, 100); // slight delay ensures DOM is painted
-    }
   }, [isTermVisible, isVisible]);
 
   return (
