@@ -11,16 +11,63 @@ const TerminalComponent = ({
   onSessionEnd,
   initialBuffer = [], 
   onData,
-  token
+  token,
+  setCurrentWorkingDir
 }) => {
   const terminalRef = useRef(null);
   const wsRef = useRef(null);
   const xterm = useRef(null);
   const fitAddon = useRef(null);
+  const cwdListenerRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const lastSentDataRef = useRef('');
   const sessionEnded = useRef(false);
 
   const hardcodedJWT = token || 'FAKE_TEST_TOKEN';
   const wsURL = `ws://localhost:5001/ws/ssh?token=${encodeURIComponent(hardcodedJWT)}&terminalId=${terminalId}`;
+
+  //Track current Working directory
+  const requestCurrentWorkingDir = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    // Cleanup previous listener
+    if (cwdListenerRef.current) {
+      wsRef.current.removeEventListener('message', cwdListenerRef.current);
+      cwdListenerRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    const listener = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (msg.type === 'data') {
+        const outputLines = msg.data.split('\n').map(line => line.trim());
+        const cwdLine = outputLines.find(line => /^\/.*/.test(line));
+        if (cwdLine) {
+          clearTimeout(timeoutRef.current);
+          wsRef.current.removeEventListener('message', listener);
+          cwdListenerRef.current = null;
+          setCurrentWorkingDir?.(terminalId, cwdLine);
+        }
+      }
+    };
+
+    cwdListenerRef.current = listener;
+    wsRef.current.addEventListener('message', listener);
+    wsRef.current.send(JSON.stringify({ type: 'input', data: 'pwd\n', terminalId }));
+
+    timeoutRef.current = setTimeout(() => {
+      wsRef.current?.removeEventListener('message', listener);
+      cwdListenerRef.current = null;
+    }, 2000);
+  };
 
   // WebSocket connection effect - independent of visibility
   useEffect(() => {
@@ -35,6 +82,7 @@ const TerminalComponent = ({
       ws.onopen = () => {
         console.log(`[WS] Connected to terminal ${terminalId}`);
         retryCount = 0;
+        setTimeout(requestCurrentWorkingDir, 500);
       };
 
       ws.onmessage = (event) => {
@@ -118,6 +166,7 @@ const TerminalComponent = ({
     if (terminalRef.current) {
       terminalRef.current.style.display = 'block';
     }
+    
     // Only create a new terminal if it doesn't exist
     if (!xterm.current) {
       try {
@@ -141,6 +190,8 @@ const TerminalComponent = ({
 
         // Attach input handler only for visible/active terminal
         const onDataHandler = (data) => {
+          lastSentDataRef.current += data;
+
           if (!sessionEnded.current && wsRef.current?.readyState === WebSocket.OPEN) {
             try {
               wsRef.current.send(
@@ -150,6 +201,20 @@ const TerminalComponent = ({
                   terminalId
                 })
               );
+
+              // Detect end of command on Enter key
+              if (data === '\r' || data === '\n') {
+                const trimmed = lastSentDataRef.current.trim();
+                lastSentDataRef.current = ''; // reset
+
+                // Check if it's a 'cd' command
+                if (/\bcd\b/.test(trimmed)) {
+                  setTimeout(() => {
+                    requestCurrentWorkingDir();
+                  }, 300); // Give shell a moment to change dir
+                }
+              }
+
             } catch (err) {
               console.error("[WS] Failed to send input:", err);
             }
@@ -177,6 +242,7 @@ const TerminalComponent = ({
       xterm.current.clear();
       initialBuffer.forEach(chunk => xterm.current.write(chunk));
       xterm.current.scrollToBottom();
+      requestCurrentWorkingDir(); // Track working dir
     }
   }, [isVisible, terminalId]);
 
@@ -187,8 +253,20 @@ const TerminalComponent = ({
         xterm.current.dispose();
         xterm.current = null;
       }
+
       if (terminalRef.current?._resizeObserver) {
         terminalRef.current._resizeObserver.disconnect();
+        delete terminalRef.current._resizeObserver;
+      }
+
+      if (cwdListenerRef.current && wsRef.current) {
+        wsRef.current.removeEventListener('message', cwdListenerRef.current);
+        cwdListenerRef.current = null;
+      }
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, []);
@@ -265,6 +343,14 @@ const TerminalComponent = ({
       }, 100); // slight delay ensures DOM is painted
     }
   }, [isTermVisible]);
+
+  useEffect(() => {
+    if ((isTermVisible && isVisible) && wsRef.current?.readyState === WebSocket.OPEN) {
+      setTimeout(() => {
+        requestCurrentWorkingDir();
+      }, 500); // small delay to ensure shell readiness
+    }
+  }, [isTermVisible, isVisible]);
 
   return (
     <div

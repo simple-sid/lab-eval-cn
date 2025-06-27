@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Panel, PanelGroup } from 'react-resizable-panels';
 import Header from './Header';
 import EditorPane from './EditorPane';
@@ -29,7 +29,7 @@ const MobileTabs = ({ activeTab, setActiveTab, tabs }) => (
 );
 
 // Helper functions
-const getCurrentUser = () => 'simple-sid';
+const getCurrentUser = () => 'testuser123'; // replace with jwt
 const getCurrentDateTime = () => {
   const now = new Date();
   return now.toISOString().slice(0, 19).replace('T', ' ');
@@ -41,10 +41,21 @@ export default function CNLabWorkspace() {
   const [language, setLanguage] = useState('c');
   const [showQuestion, setShowQuestion] = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
-  const [currentWorkingDir, setCurrentWorkingDir] = useState(''); // Track current directory
+  const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+  const [files, setFiles] = useState([]);
+  const [tagToFileMap, setTagToFileMap] = useState({}); // Example: { 'server1': 'server_file.c', 'client2': 'client_impl.c' }
+  const [currentWorkingDir, setCurrentWorkingDir] = useState('~/'); // Track current directory
   const [saveStatus, setSaveStatus] = useState('idle'); //track autosave status
+  const [activeFileId, setActiveFileId] = useState('server');
+  const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testCaseResults, setTestCaseResults] = useState([]);
   const panelRef = useRef(null);
   // const [isSubmitted, setIsSubmitted] = useState(false);
+
+  useEffect(() => {
+    console.log(currentWorkingDir);
+  }, [currentWorkingDir]);
 
   // Load questions from public/questionPool.json
   const [questions, setQuestions] = useState([]);
@@ -55,9 +66,44 @@ export default function CNLabWorkspace() {
       .catch(err => console.error('Error loading questions:', err));
   }, []);
 
-  const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
-  
-  const [files, setFiles] = useState([]);
+  //tags for diff server and client codes
+  function getTagsFromQuestion(question) {
+    if (!question) return [];
+
+    const tags = [];
+
+    const serverCount = Object.keys(question.precode || {}).length;
+    const clientCount = Object.keys(question.clientPrecode || {}).length;
+
+    if (serverCount === 1) {
+      tags.push('server');
+    } else {
+      for (let i = 1; i <= serverCount; i++) {
+        tags.push(`server${i}`);
+      }
+    }
+
+    if (clientCount === 1) {
+      tags.push('client');
+    } else {
+      for (let i = 1; i <= clientCount; i++) {
+        tags.push(`client${i}`);
+      }
+    }
+
+    return tags;
+  }
+  const tags = useMemo(() => {
+  if (
+    !Array.isArray(questions) ||
+    questions.length === 0 ||
+    !questions[activeQuestionIdx]
+  ) return [];
+
+  return getTagsFromQuestion(questions[activeQuestionIdx]);
+}, [questions, activeQuestionIdx]);
+
+
   useEffect(() => {
     fetch('/codeFiles.json')
       .then(res => res.json())
@@ -70,11 +116,6 @@ export default function CNLabWorkspace() {
       })
       .catch(err => console.error("Error loading files:", err));
   }, []);
-  
-  const [activeFileId, setActiveFileId] = useState('server');
-  const [isRunning, setIsRunning] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [testCaseResults, setTestCaseResults] = useState([]);
 
   useEffect(() => {
     const onEval = (e) => {
@@ -167,6 +208,10 @@ export default function CNLabWorkspace() {
     ]);
     setActiveFileId(newId);
   };
+
+  const openFile = () => {
+
+  }
 
   const handleCloseFile = (fileId) => {
     setFiles(prevFiles => prevFiles.filter(f => f.id !== fileId));
@@ -281,12 +326,53 @@ export default function CNLabWorkspace() {
     setShowTerminal(true);
     window.dispatchEvent(new CustomEvent('stop-all-processes'));
   };
-  const handleSubmit = () => {
-    // setIsSubmitting(true);
-    setShowTerminal(true);
 
-    handleRun();
+  //Handle Sumission - eval of test cases and log to DB
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+
+    try {
+      const question = questions[activeQuestionIdx];
+      const sourceCode = Object.fromEntries(files.map(f => [f.name, f.code]));
+
+      // Step 1 (mocked for now)
+      // const evalRes = await fetch('/api/submission/eval', { ... });
+      // const { passedCount, totalTestCases } = await evalRes.json();
+
+      const passedCount = testCaseResults.filter(tc => tc.status === 'PASS').length || 5;
+      const totalTestCases = testCaseResults.length || 5; // 5/5 for testing
+
+      // Step 2: Submit to DB
+      const payload = {
+        userId: getCurrentUser(),
+        questionId: question.id,
+        module: question.module || 'Week1', //Assume module name for now
+        sourceCode,
+        language,
+        passedCount,
+        totalTestCases,
+      };
+
+      const res = await fetch('http://localhost:5001/api/submission/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert('✅ Submitted successfully!');
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err) {
+      console.error('[Frontend] Submission error:', err);
+      alert('❌ Failed to submit.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
   const handleTimeUp = () => {
     alert("[Time] Time's up! Your code will be automatically submitted.");
     handleSubmit();
@@ -406,6 +492,7 @@ export default function CNLabWorkspace() {
                   setActiveFileId={setActiveFileId}
                   updateCode={updateCode}
                   addNewFile={addNewFile}
+                  openFile={openFile}
                   onRun={handleRun}
                   onSubmit={handleSubmit}
                   onStopAll={handleStopAll}
@@ -419,6 +506,9 @@ export default function CNLabWorkspace() {
                   saveStatus={saveStatus}
                   renameFile={renameFile}
                   updateFileLanguage={updateFileLanguage}
+                  tags={tags}
+                  tagToFileMap={tagToFileMap}
+                  setTagToFileMap={setTagToFileMap}
                 />
               </Panel>
             </PanelGroup>
@@ -433,7 +523,11 @@ export default function CNLabWorkspace() {
             id="terminal-panel"
             order={3}
           >
-            <TerminalPane onClose={() => setShowTerminal(false)} termVisible={showTerminal} />
+            <TerminalPane 
+              onClose={() => setShowTerminal(false)} 
+              termVisible={showTerminal} 
+              setCurrentWorkingDir={setCurrentWorkingDir} 
+            />
           </Panel>
         </PanelGroup>
       </div>

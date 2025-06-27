@@ -67,7 +67,9 @@ export function initSSHWebSocket(server) {
                 const errorOutput = data.toString('utf8');
                 ws.send(JSON.stringify({ type: 'data', data: errorOutput }));
               }
-            });            ws.on('message', (message) => {
+            });            
+            
+            ws.on('message', (message) => {
               try {
                 const { type, data, cols, rows } = JSON.parse(message);
 

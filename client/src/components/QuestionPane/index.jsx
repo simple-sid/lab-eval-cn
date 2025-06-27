@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import TestCases from './TestCases';
+import Submissions from './Submissions';
 import { 
   XMarkIcon,
   ClockIcon,
@@ -104,6 +105,17 @@ export default function QuestionPane({ questions, activeQuestionIdx, setActiveQu
             {question.testCases?.length || 0}
           </span>
         </button>
+        <button
+          onClick={() => setActiveTab('submissions')}
+          className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-all duration-300 ${
+            activeTab === 'submissions'
+              ? 'text-indigo-600 bg-white border-b-2 border-indigo-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+          }`}
+        >
+          <ClockIcon className="w-4 h-4" />
+          <span>Submissions</span>
+        </button>
       </div>
 
       {/* Content */}
@@ -149,6 +161,11 @@ export default function QuestionPane({ questions, activeQuestionIdx, setActiveQu
         {activeTab === 'testcases' && (
           <div className="fade-in-up">
             <TestCases testCases={question.testCases || []} testCaseResults={testCaseResults} />
+          </div>
+        )}
+        {activeTab === 'submissions' && (
+          <div>
+            <Submissions userId= { 'testuser123' } questionId= { question.id } /> 
           </div>
         )}
       </div>
