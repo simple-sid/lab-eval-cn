@@ -18,9 +18,11 @@ const TerminalComponent = ({
   const wsRef = useRef(null);
   const xterm = useRef(null);
   const fitAddon = useRef(null);
+  const inputReadyRef = useRef(false);
   const cwdListenerRef = useRef(null);
   const timeoutRef = useRef(null);
   const lastSentDataRef = useRef('');
+  const cwdCaptureMapRef = useRef(new Map());
   const sessionEnded = useRef(false);
 
   const hardcodedJWT = token || 'FAKE_TEST_TOKEN';
@@ -30,14 +32,16 @@ const TerminalComponent = ({
   const requestCurrentWorkingDir = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-    // Cleanup previous listener
     if (cwdListenerRef.current) {
       wsRef.current.removeEventListener('message', cwdListenerRef.current);
       cwdListenerRef.current = null;
     }
+
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
+
+    cwdCaptureMapRef.current.set(terminalId, true); // ✅ mark this terminal as suppressing output
 
     const listener = (event) => {
       let msg;
@@ -54,6 +58,7 @@ const TerminalComponent = ({
           clearTimeout(timeoutRef.current);
           wsRef.current.removeEventListener('message', listener);
           cwdListenerRef.current = null;
+          cwdCaptureMapRef.current.delete(terminalId); // ✅ stop suppression
           setCurrentWorkingDir?.(terminalId, cwdLine);
         }
       }
@@ -66,6 +71,7 @@ const TerminalComponent = ({
     timeoutRef.current = setTimeout(() => {
       wsRef.current?.removeEventListener('message', listener);
       cwdListenerRef.current = null;
+      cwdCaptureMapRef.current.delete(terminalId); // ✅ stop suppression on timeout
     }, 2000);
   };
 
@@ -100,7 +106,16 @@ const TerminalComponent = ({
         try {
           if (msg.type === 'data') {
             const data = msg.data;
-            // Always write data to the terminal buffer
+            const isSuppressing = cwdCaptureMapRef.current.get(terminalId);
+
+            if (isSuppressing) {
+              // Just drop everything, including 'pwd' and its result
+              xterm.current?.write('\r');
+              onData?.('\r');
+              return;
+            }
+
+            // ✅ Normal output
             xterm.current?.write(data);
             onData?.(data);
           } else if (msg.type === 'end') {
@@ -190,6 +205,8 @@ const TerminalComponent = ({
 
         // Attach input handler only for visible/active terminal
         const onDataHandler = (data) => {
+          if (!inputReadyRef.current) return;
+
           lastSentDataRef.current += data;
 
           if (!sessionEnded.current && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -348,8 +365,14 @@ const TerminalComponent = ({
     if ((isTermVisible && isVisible) && wsRef.current?.readyState === WebSocket.OPEN) {
       setTimeout(() => {
         requestCurrentWorkingDir();
-      }, 500); // small delay to ensure shell readiness
+      }, 100); // small delay to ensure shell readiness
     }
+
+    // Delay user input by 100ms
+    inputReadyRef.current = false;
+    setTimeout(() => {
+      inputReadyRef.current = true;
+    }, 500);
   }, [isTermVisible, isVisible]);
 
   return (
