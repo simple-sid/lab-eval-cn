@@ -72,7 +72,26 @@ const TerminalComponent = ({
       wsRef.current?.removeEventListener('message', listener);
       cwdListenerRef.current = null;
       cwdCaptureMapRef.current.delete(terminalId); // ✅ stop suppression on timeout
+      fixCursorAfterPrompt();
     }, 2000);
+  };
+
+  const fixCursorAfterPrompt = () => {
+    setTimeout(() => {
+      if (!xterm.current) return;
+      const buffer = xterm.current.buffer.active;
+      const cursorY = buffer.cursorY;
+      const line = buffer.getLine(cursorY);
+      if (line) {
+        const lineContent = line.translateToString(true); // true = trimRight
+        const visibleLength = lineContent.length;
+
+        if (buffer.cursorX === 0 && visibleLength > 0) {
+          console.log("⚠️ Fixing prompt cursor position");
+          xterm.current.write(`\x1b[${visibleLength}C`);
+        }
+      }
+    }, 100); // delay to let DOM and terminal repaint
   };
 
   // WebSocket connection effect - independent of visibility
@@ -264,27 +283,11 @@ const TerminalComponent = ({
         }
       }
       initialBuffer.forEach(chunk => xterm.current.write(chunk));
+      fixCursorAfterPrompt();
       xterm.current.scrollToBottom();
       requestCurrentWorkingDir(); // Track working dir
     } 
-    
-    if ((isTermVisible && isVisible) && xterm.current) {
-      setTimeout(() => {
-        const buffer = xterm.current.buffer.active;
-        const cursorY = buffer.cursorY;
-
-        const line = buffer.getLine(cursorY);
-        if (line) {
-          const lineContent = line.translateToString(true); // true = trimRight
-          const visibleLength = lineContent.length;
-
-          if (buffer.cursorX === 0 && visibleLength > 0) {
-            xterm.current.write(`\x1b[${visibleLength}C`); // Move cursor forward
-          }
-        }
-      }, 100); // slight delay ensures DOM is painted
-    }
-  }, [isVisible, terminalId,isTermVisible]);
+  }, [isVisible, terminalId]);
 
   // cleanup effect that runs on unmount only
   useEffect(() => {
@@ -395,7 +398,7 @@ const TerminalComponent = ({
     inputReadyRef.current = false;
     setTimeout(() => {
       inputReadyRef.current = true;
-    }, 500);
+    }, 1000);
   }, [isTermVisible, isVisible]);
 
   return (
