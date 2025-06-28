@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Panel, PanelGroup } from 'react-resizable-panels';
+import axios from 'axios';
 import Header from './Header';
 import EditorPane from './EditorPane';
 import QuestionPane from './QuestionPane';
@@ -44,7 +45,7 @@ export default function CNLabWorkspace() {
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [files, setFiles] = useState([]);
   const [tagToFileMap, setTagToFileMap] = useState({}); // Example: { 'server1': 'server_file.c', 'client2': 'client_impl.c' }
-  const [currentWorkingDir, setCurrentWorkingDir] = useState('~/'); // Track current directory
+  const [currentWorkingDir, setCurrentWorkingDir] = useState('/home/labuser'); // Track current directory
   const [saveStatus, setSaveStatus] = useState('idle'); //track autosave status
   const [activeFileId, setActiveFileId] = useState('server');
   const [isRunning, setIsRunning] = useState(false);
@@ -209,9 +210,40 @@ export default function CNLabWorkspace() {
     setActiveFileId(newId);
   };
 
-  const openFile = () => {
+  const openFile = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/api/file/list-files', {
+        params: { cwd: currentWorkingDir }
+      });
+      const files = response.data.files;
 
-  }
+      const selected = window.prompt(`Available files:\n${files.join('\n')}\n\nEnter filename to open:`);
+
+      if (selected && files.includes(selected)) {
+        const res = await axios.get('http://localhost:5001/api/file/read-file', {
+          params: { filename: selected, cwd: currentWorkingDir }
+        });
+
+        const code = res.data.code;
+
+        const newId = `file_${Date.now()}`;
+        setFiles(prev => [
+          ...prev,
+          {
+            id: newId,
+            name: selected,
+            path: selected,
+            code,
+            language: selected.endsWith('.py') ? 'python' : 'c'
+          }
+        ]);
+        setActiveFileId(newId);
+      }
+    } catch (err) {
+      console.error("Failed to open file:", err);
+      alert("Could not load file list.");
+    }
+  };
 
   const handleCloseFile = (fileId) => {
     setFiles(prevFiles => prevFiles.filter(f => f.id !== fileId));

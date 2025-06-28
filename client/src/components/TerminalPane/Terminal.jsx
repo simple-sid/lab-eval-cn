@@ -22,7 +22,6 @@ const TerminalComponent = ({
   const cwdListenerRef = useRef(null);
   const timeoutRef = useRef(null);
   const lastSentDataRef = useRef('');
-  const cwdCaptureMapRef = useRef(new Map());
   const sessionEnded = useRef(false);
 
   const hardcodedJWT = token || 'FAKE_TEST_TOKEN';
@@ -30,68 +29,28 @@ const TerminalComponent = ({
 
   //Track current Working directory
   const requestCurrentWorkingDir = () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!xterm.current) return;
 
-    if (cwdListenerRef.current) {
-      wsRef.current.removeEventListener('message', cwdListenerRef.current);
-      cwdListenerRef.current = null;
+    const buffer = xterm.current.buffer.active;
+    const lastLine = buffer.getLine(buffer.length - 1);
+
+    if (!lastLine) return;
+    const lineText = lastLine.translateToString(true).trim();
+
+    const colonIndex = lineText.indexOf(':');
+    const dollarIndex = lineText.lastIndexOf('$');
+    let cwd;
+
+    if (colonIndex !== -1 && dollarIndex !== -1 && dollarIndex > colonIndex) {
+      cwd = lineText.slice(colonIndex + 1, dollarIndex).trim();
     }
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
+    if (cwd) {
+      const resolvedCWD = cwd.replace('~','/home/labuser');
+      setCurrentWorkingDir?.(terminalId, resolvedCWD);
+    } else {
+      console.log("[CWD] No prompt-like pattern found in last line");
     }
-
-    cwdCaptureMapRef.current.set(terminalId, true); // ✅ mark this terminal as suppressing output
-
-    const listener = (event) => {
-      let msg;
-      try {
-        msg = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-
-      if (msg.type === 'data') {
-        const outputLines = msg.data.split('\n').map(line => line.trim());
-        const cwdLine = outputLines.find(line => /^\/.*/.test(line));
-        if (cwdLine) {
-          clearTimeout(timeoutRef.current);
-          wsRef.current.removeEventListener('message', listener);
-          cwdListenerRef.current = null;
-          cwdCaptureMapRef.current.delete(terminalId); // ✅ stop suppression
-          setCurrentWorkingDir?.(terminalId, cwdLine);
-        }
-      }
-    };
-
-    cwdListenerRef.current = listener;
-    wsRef.current.addEventListener('message', listener);
-    wsRef.current.send(JSON.stringify({ type: 'input', data: 'pwd\n', terminalId }));
-
-    timeoutRef.current = setTimeout(() => {
-      wsRef.current?.removeEventListener('message', listener);
-      cwdListenerRef.current = null;
-      cwdCaptureMapRef.current.delete(terminalId); // ✅ stop suppression on timeout
-      fixCursorAfterPrompt();
-    }, 2000);
-  };
-
-  const fixCursorAfterPrompt = () => {
-    setTimeout(() => {
-      if (!xterm.current) return;
-      const buffer = xterm.current.buffer.active;
-      const cursorY = buffer.cursorY;
-      const line = buffer.getLine(cursorY);
-      if (line) {
-        const lineContent = line.translateToString(true); // true = trimRight
-        const visibleLength = lineContent.length;
-
-        if (buffer.cursorX === 0 && visibleLength > 0) {
-          console.log("⚠️ Fixing prompt cursor position");
-          xterm.current.write(`\x1b[${visibleLength}C`);
-        }
-      }
-    }, 100); // delay to let DOM and terminal repaint
   };
 
   // WebSocket connection effect - independent of visibility
@@ -102,6 +61,7 @@ const TerminalComponent = ({
 
     const connectWebSocket = () => {
       const ws = new WebSocket(wsURL);
+      
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -125,16 +85,7 @@ const TerminalComponent = ({
         try {
           if (msg.type === 'data') {
             const data = msg.data;
-            const isSuppressing = cwdCaptureMapRef.current.get(terminalId);
 
-            if (isSuppressing) {
-              // Just drop everything, including 'pwd' and its result
-              xterm.current?.write('\r');
-              onData?.('\r');
-              return;
-            }
-
-            // ✅ Normal output
             xterm.current?.write(data);
             onData?.(data);
           } else if (msg.type === 'end') {
@@ -143,8 +94,21 @@ const TerminalComponent = ({
             xterm.current.blur();
             onSessionEnd?.();
           } else if (msg.type === 'error') {
-            xterm.current.writeln(`\r\n*** Error: ${msg.message} ***`);
-          }
+            const message = msg.message || '';
+
+            xterm.current?.writeln(`\r\n*** Error: ${message} ***`);
+
+            // ✅ Detect SSH auth failure
+            if (message.includes('All configured authentication methods failed')) {
+              xterm.current?.writeln(`\r\n*** Retrying connection in 3 seconds... ***`);
+              onData();
+              setTimeout(() => {
+                if (xterm.current) xterm.current.clear();
+                  retryCount = 0;
+                  connectWebSocket();
+                }, 3000);
+              }
+            }
         } catch (err) {
           console.error("[WS] Terminal message handling failed:", err);
           if (xterm.current) {
@@ -226,8 +190,6 @@ const TerminalComponent = ({
         const onDataHandler = (data) => {
           if (!inputReadyRef.current) return;
 
-          lastSentDataRef.current += data;
-
           if (!sessionEnded.current && wsRef.current?.readyState === WebSocket.OPEN) {
             try {
               wsRef.current.send(
@@ -240,17 +202,20 @@ const TerminalComponent = ({
 
               // Detect end of command on Enter key
               if (data === '\r' || data === '\n') {
-                const trimmed = lastSentDataRef.current.trim();
-                lastSentDataRef.current = ''; // reset
+                const buffer = xterm.current.buffer.active;
+                const cursorY = buffer.cursorY;
+                const line = buffer.getLine(cursorY);
+                const currentLineText = line?.translateToString(true).trim() || '';
+                
+                // Strip prompt prefix (everything up to and including the first "$ ")
+                const commandOnly = currentLineText.replace(/^.*?\$\s*/, '').trim();
 
-                // Check if it's a 'cd' command
-                if (/\bcd\b/.test(trimmed)) {
+                if (/^cd\b/.test(commandOnly)) {
                   setTimeout(() => {
                     requestCurrentWorkingDir();
-                  }, 300); // Give shell a moment to change dir
+                  }, 300);
                 }
               }
-
             } catch (err) {
               console.error("[WS] Failed to send input:", err);
             }
@@ -283,7 +248,6 @@ const TerminalComponent = ({
         }
       }
       initialBuffer.forEach(chunk => xterm.current.write(chunk));
-      fixCursorAfterPrompt();
       xterm.current.scrollToBottom();
       requestCurrentWorkingDir(); // Track working dir
     } 
