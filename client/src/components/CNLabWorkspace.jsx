@@ -5,6 +5,7 @@ import Header from './Header';
 import EditorPane from './EditorPane';
 import QuestionPane from './QuestionPane';
 import TerminalPane from './TerminalPane';
+import FileSelectorModal from './EditorPane/fileSelectorModal';
 import ResizeHandle from './shared/ResizeHandle';
 import { useIsMobile } from './utils/useIsMobile';
 
@@ -44,10 +45,13 @@ export default function CNLabWorkspace() {
   const [showTerminal, setShowTerminal] = useState(false);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [files, setFiles] = useState([]);
+  const [fileNo, setFileNo] = useState(1);
   const [tagToFileMap, setTagToFileMap] = useState({}); // Example: { 'server1': 'server_file.c', 'client2': 'client_impl.c' }
   const [currentWorkingDir, setCurrentWorkingDir] = useState('/home/labuser'); // Track current directory
   const [saveStatus, setSaveStatus] = useState('idle'); //track autosave status
   const [activeFileId, setActiveFileId] = useState('server');
+  const [showFileModal, setShowFileModal] = useState(false);
+  const [availableFiles, setAvailableFiles] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [testCaseResults, setTestCaseResults] = useState([]);
@@ -112,7 +116,7 @@ export default function CNLabWorkspace() {
         // Ensure each file has a .path property (default to name if not present)
         setFiles(data.map(f => ({
           ...f,
-          path: f.path || f.name // always set path
+          path: `${currentWorkingDir}/${f.name}` // always set path
         })));
       })
       .catch(err => console.error("Error loading files:", err));
@@ -156,7 +160,7 @@ export default function CNLabWorkspace() {
         return {
           id: filename.replace(/\.[^/.]+$/, ''),
           name: filename.split('/').pop(), // just the filename
-          path: filename, // full relative path
+          path: `${currentWorkingDir}/${filename}`, // full relative path
           language: lang,
           code: code
         };
@@ -190,19 +194,27 @@ export default function CNLabWorkspace() {
   }, [files, activeFileId]);
 
   const addNewFile = () => {
+    const fileName = `new_file_${fileNo}.${language === 'c' ? 'c' : language === 'python' ? 'py' : 'txt'}`;
+    
+    const confirmCreate = window.confirm(
+      `📁 This new file will be created in:\n\n  ${currentWorkingDir}\n\nFilename: ${fileName}\n\nIf you'd like to save it elsewhere, please change the directory in your terminal first.\n\nContinue?`
+    );
+
+    if (!confirmCreate) return;
+    setFileNo(fileNo+1);
+
     const timestamp = Date.now();
     const newId = `file_${timestamp}`;
-    const extension = language === 'c' ? 'c' :
-                      language === 'python' ? 'py' : 'txt';
     const template = language === 'c' ? 
       `"""\nNew C File\nAuthor: ${getCurrentUser()}\nCreated: ${getCurrentDateTime()} UTC\n"""\n\n# Your code here\n` :
       `// New ${language} file\n// Author: ${getCurrentUser()}\n// Created: ${getCurrentDateTime()} UTC\n\n`;
+
     setFiles(prevFiles => [
       ...prevFiles, 
       {
         id: newId,
-        name: `new_file_1.${extension}`,
-        path: `new_file_1.${extension}`,
+        name: fileName,
+        path: `${currentWorkingDir}/${fileName}`,
         code: template,
         language
       }
@@ -215,33 +227,45 @@ export default function CNLabWorkspace() {
       const response = await axios.get('http://localhost:5001/api/file/list-files', {
         params: { cwd: currentWorkingDir }
       });
-      const files = response.data.files;
-
-      const selected = window.prompt(`Available files:\n${files.join('\n')}\n\nEnter filename to open:`);
-
-      if (selected && files.includes(selected)) {
-        const res = await axios.get('http://localhost:5001/api/file/read-file', {
-          params: { filename: selected, cwd: currentWorkingDir }
-        });
-
-        const code = res.data.code;
-
-        const newId = `file_${Date.now()}`;
-        setFiles(prev => [
-          ...prev,
-          {
-            id: newId,
-            name: selected,
-            path: selected,
-            code,
-            language: selected.endsWith('.py') ? 'python' : 'c'
-          }
-        ]);
-        setActiveFileId(newId);
-      }
+      setAvailableFiles(response.data.files);
+      setShowFileModal(true); // show modal
     } catch (err) {
       console.error("Failed to open file:", err);
       alert("Could not load file list.");
+    }
+  };
+
+  const handleFileSelect = async (selected) => {
+    setShowFileModal(false);
+    if (!selected) return;
+
+    const alreadyOpen = files.some(f => f.name === selected && f.path === `${currentWorkingDir}/${selected}`);
+    if (alreadyOpen) {
+      alert(`⚠️ File "${selected}" is already open in the editor.\n\nPlease choose a different file.`);
+      return;
+    }
+
+    try {
+      const res = await axios.get('http://localhost:5001/api/file/read-file', {
+        params: { filename: selected, cwd: currentWorkingDir }
+      });
+
+      const code = res.data.code;
+      const newId = `file_${Date.now()}`;
+      setFiles(prev => [
+        ...prev,
+        {
+          id: newId,
+          name: selected,
+          path: `${currentWorkingDir}/${selected}`,
+          code,
+          language: selected.endsWith('.py') ? 'python' : 'c'
+        }
+      ]);
+      setActiveFileId(newId);
+    } catch (err) {
+      console.error("Error loading file content:", err);
+      alert("Failed to load file content.");
     }
   };
 
@@ -562,6 +586,14 @@ export default function CNLabWorkspace() {
             />
           </Panel>
         </PanelGroup>
+
+        {showFileModal && (
+          <FileSelectorModal
+            files={availableFiles}
+            onSelect={handleFileSelect}
+            onClose={() => setShowFileModal(false)}
+          />
+        )}
       </div>
     </div>
   );

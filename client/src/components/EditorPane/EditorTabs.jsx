@@ -108,7 +108,7 @@ export default function EditorTabs({
               <span 
                 className="text-sm truncate max-w-32"
                 onDoubleClick={() => startRename(file.id, file.name)}
-                title={file.name}
+                title={file.path}
               >
                 {file.name}
               </span>

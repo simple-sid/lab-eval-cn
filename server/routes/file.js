@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { exec } from 'child_process';
+import path from 'path';
 
 const router = Router();
 
@@ -13,9 +14,9 @@ function generateSessionId() {
 }
 
 router.get('/list-files', (req, res) => {
-  const { userId, cwd } = req.query;
+  const { cwd } = req.query;
 
-  userId = 'testuser123'; //hardcoded for now, must use JWT
+  const userId = 'testuser123'; //hardcoded for now, must use JWT
   const sessionId = generateSessionId();
   const containerName = `lab_exam_${userId}_${sessionId}`;
 
@@ -26,6 +27,8 @@ router.get('/list-files', (req, res) => {
       return res.status(500).json({ error: stderr || 'Failed to list files' });
     }
 
+    console.log('[Docker] Output:', stdout);
+
     const files = stdout
       .split('\n')
       .filter(f => f.endsWith('.c') || f.endsWith('.py'));
@@ -35,16 +38,19 @@ router.get('/list-files', (req, res) => {
 });
 
 router.get('/read-file', (req, res) => {
-  const { userId, cwd, filename } = req.query;
+  const { cwd, filename } = req.query;
 
-  userId = 'testuser123'; //hardcoded for now, must use JWT
+  const userId = 'testuser123'; // ✅ works now because it's declared with let
   const sessionId = generateSessionId();
   const containerName = `lab_exam_${userId}_${sessionId}`;
 
   const fullPath = path.posix.join(cwd || '/home/labuser', filename);
 
-  exec(`docker exec ${containerName} cat ${fullPath}`, (err, stdout, stderr) => {
+  const command = `docker exec ${containerName} cat "${fullPath}"`;
+
+  exec(command, (err, stdout, stderr) => {
     if (err) {
+      console.error('[Docker Read Error]', stderr || err.message);
       return res.status(500).json({ error: stderr || 'Failed to read file' });
     }
     res.json({ code: stdout });
