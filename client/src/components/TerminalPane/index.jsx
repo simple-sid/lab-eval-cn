@@ -8,7 +8,11 @@ import {
   PlusIcon
 } from '@heroicons/react/24/outline';
 
-export default function TerminalPane({ onClose, termVisible }) {
+export default function TerminalPane({ 
+  onClose,
+  termVisible,
+  setCurrentWorkingDir
+}) {
   const jwtToken = localStorage.getItem('jwt'); // assuming JWT is stored here
 
   const [terminals, setTerminals] = useState([
@@ -57,6 +61,7 @@ export default function TerminalPane({ onClose, termVisible }) {
       initialBuffer={term.buffer}
       onData={chunk => updateBuffer(term.id, chunk)}
       token={jwtToken}
+      setCurrentWorkingDir={(termId, cwd) => setCurrentWorkingDir(cwd)} 
     />
   ));
 

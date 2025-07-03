@@ -78,7 +78,33 @@ export function initSSHWebSocket(server) {
           if (err) {
             return ws.send(JSON.stringify({ type: 'error', message: 'SSH Shell Error' }));
           }
+            stream.stderr?.on('data', (data) => {
+              if (ws.readyState === ws.OPEN) {
+                // Send stderr data as well for complete output
+                const errorOutput = data.toString('utf8');
+                ws.send(JSON.stringify({ type: 'data', data: errorOutput }));
+              }
+            });            
+            
+            ws.on('message', (message) => {
+              try {
+                const { type, data, cols, rows } = JSON.parse(message);
 
+                if (type === 'input') {
+                  // Handle Ctrl+C properly by sending SIGINT
+                  if (data === '\u0003') { // Ctrl+C character
+                    stream.write(data);
+                    // Don't automatically kill other processes - let Ctrl+C handle it naturally
+                  } else {
+                    stream.write(data);
+                  }
+                } else if (type === 'resize') {
+                  stream.setWindow(rows, cols, 600, 800);
+                }
+              } catch (err) {
+                console.error('[WS] Invalid message format:', err);
+              }
+            });
           sessions[terminalId] = { conn, stream, ws };
 
           // Handle incoming data from SSH

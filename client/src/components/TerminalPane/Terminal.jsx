@@ -11,16 +11,47 @@ const TerminalComponent = ({
   onSessionEnd,
   initialBuffer = [], 
   onData,
-  token
+  token,
+  setCurrentWorkingDir
 }) => {
   const terminalRef = useRef(null);
   const wsRef = useRef(null);
   const xterm = useRef(null);
   const fitAddon = useRef(null);
+  const inputReadyRef = useRef(false);
+  const cwdListenerRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const lastSentDataRef = useRef('');
   const sessionEnded = useRef(false);
 
   const hardcodedJWT = token || 'FAKE_TEST_TOKEN';
   const wsURL = `ws://localhost:5001/ws/ssh?token=${encodeURIComponent(hardcodedJWT)}&terminalId=${terminalId}`;
+
+  //Track current Working directory
+  const requestCurrentWorkingDir = () => {
+    if (!xterm.current) return;
+
+    const buffer = xterm.current.buffer.active;
+    const lastLine = buffer.getLine(buffer.length - 1);
+
+    if (!lastLine) return;
+    const lineText = lastLine.translateToString(true).trim();
+
+    const colonIndex = lineText.indexOf(':');
+    const dollarIndex = lineText.lastIndexOf('$');
+    let cwd;
+
+    if (colonIndex !== -1 && dollarIndex !== -1 && dollarIndex > colonIndex) {
+      cwd = lineText.slice(colonIndex + 1, dollarIndex).trim();
+    }
+
+    if (cwd) {
+      const resolvedCWD = cwd.replace('~','/home/labuser');
+      setCurrentWorkingDir?.(terminalId, resolvedCWD);
+    } else {
+      console.log("[CWD] No prompt-like pattern found in last line");
+    }
+  };
 
   // WebSocket connection effect - independent of visibility
   useEffect(() => {
@@ -30,11 +61,13 @@ const TerminalComponent = ({
 
     const connectWebSocket = () => {
       const ws = new WebSocket(wsURL);
+      
       wsRef.current = ws;
 
       ws.onopen = () => {
         console.log(`[WS] Connected to terminal ${terminalId}`);
         retryCount = 0;
+        setTimeout(requestCurrentWorkingDir, 500);
       };
 
       ws.onmessage = (event) => {
@@ -52,7 +85,7 @@ const TerminalComponent = ({
         try {
           if (msg.type === 'data') {
             const data = msg.data;
-            // Always write data to the terminal buffer
+
             xterm.current?.write(data);
             onData?.(data);
           } else if (msg.type === 'end') {
@@ -61,8 +94,21 @@ const TerminalComponent = ({
             xterm.current.blur();
             onSessionEnd?.();
           } else if (msg.type === 'error') {
-            xterm.current.writeln(`\r\n*** Error: ${msg.message} ***`);
-          }
+            const message = msg.message || '';
+
+            xterm.current?.writeln(`\r\n*** Error: ${message} ***`);
+
+            // ✅ Detect SSH auth failure
+            if (message.includes('All configured authentication methods failed')) {
+              xterm.current?.writeln(`\r\n*** Retrying connection in 3 seconds... ***`);
+              onData();
+              setTimeout(() => {
+                if (xterm.current) xterm.current.clear();
+                  retryCount = 0;
+                  connectWebSocket();
+                }, 3000);
+              }
+            }
         } catch (err) {
           console.error("[WS] Terminal message handling failed:", err);
           if (xterm.current) {
@@ -118,6 +164,7 @@ const TerminalComponent = ({
     if (terminalRef.current) {
       terminalRef.current.style.display = 'block';
     }
+    
     // Only create a new terminal if it doesn't exist
     if (!xterm.current) {
       try {
@@ -141,6 +188,8 @@ const TerminalComponent = ({
 
         // Attach input handler only for visible/active terminal
         const onDataHandler = (data) => {
+          if (!inputReadyRef.current) return;
+
           if (!sessionEnded.current && wsRef.current?.readyState === WebSocket.OPEN) {
             try {
               wsRef.current.send(
@@ -150,6 +199,23 @@ const TerminalComponent = ({
                   terminalId
                 })
               );
+
+              // Detect end of command on Enter key
+              if (data === '\r' || data === '\n') {
+                const buffer = xterm.current.buffer.active;
+                const cursorY = buffer.cursorY;
+                const line = buffer.getLine(cursorY);
+                const currentLineText = line?.translateToString(true).trim() || '';
+                
+                // Strip prompt prefix (everything up to and including the first "$ ")
+                const commandOnly = currentLineText.replace(/^.*?\$\s*/, '').trim();
+
+                if (/^cd\b/.test(commandOnly)) {
+                  setTimeout(() => {
+                    requestCurrentWorkingDir();
+                  }, 300);
+                }
+              }
             } catch (err) {
               console.error("[WS] Failed to send input:", err);
             }
@@ -175,9 +241,16 @@ const TerminalComponent = ({
       fitAddon.current?.fit();
       // Clear existing display and replay full buffer for correct wrapping
       xterm.current.clear();
+      if (initialBuffer.length > 0) {
+        const lastChunk = initialBuffer[initialBuffer.length - 1];
+        if (lastChunk.endsWith('\r')) {
+          initialBuffer[initialBuffer.length - 1] = lastChunk.slice(0, -1);
+        }
+      }
       initialBuffer.forEach(chunk => xterm.current.write(chunk));
       xterm.current.scrollToBottom();
-    }
+      requestCurrentWorkingDir(); // Track working dir
+    } 
   }, [isVisible, terminalId]);
 
   // cleanup effect that runs on unmount only
@@ -187,8 +260,20 @@ const TerminalComponent = ({
         xterm.current.dispose();
         xterm.current = null;
       }
+
       if (terminalRef.current?._resizeObserver) {
         terminalRef.current._resizeObserver.disconnect();
+        delete terminalRef.current._resizeObserver;
+      }
+
+      if (cwdListenerRef.current && wsRef.current) {
+        wsRef.current.removeEventListener('message', cwdListenerRef.current);
+        cwdListenerRef.current = null;
+      }
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, []);
@@ -265,6 +350,20 @@ const TerminalComponent = ({
       }, 100); // slight delay ensures DOM is painted
     }
   }, [isTermVisible]);
+
+  useEffect(() => {
+    if ((isTermVisible && isVisible) && wsRef.current?.readyState === WebSocket.OPEN) {
+      setTimeout(() => {
+        requestCurrentWorkingDir();
+      }, 50); // small delay to ensure shell readiness
+    }
+
+    // Delay user input by 100ms
+    inputReadyRef.current = false;
+    setTimeout(() => {
+      inputReadyRef.current = true;
+    }, 1000);
+  }, [isTermVisible, isVisible]);
 
   return (
     <div

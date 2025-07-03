@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import TagAssignmentModal from './TagAssignmentModel';
 import EditorTabs from './EditorTabs';
 import RunButtons from './RunButtons';
 import MonacoEditor from '@monaco-editor/react';
@@ -8,7 +9,9 @@ import {
   CogIcon,
   DocumentPlusIcon,
   BoltIcon,
-  WrenchIcon
+  WrenchIcon,
+  DocumentIcon,
+  TagIcon
 } from '@heroicons/react/24/outline';
 
 export default function EditorPane({
@@ -21,6 +24,7 @@ export default function EditorPane({
   activeFile,
   updateCode,
   addNewFile,
+  openFile,
   onRun,
   onEvaluate,
   onSubmit,
@@ -33,10 +37,14 @@ export default function EditorPane({
   onCloseFile,
   saveStatus,
   renameFile,
-  updateFileLanguage
+  updateFileLanguage,
+  tags,
+  tagToFileMap,
+  setTagToFileMap,
 }) {
   const [fontSize, setFontSize] = useState(14);
   const [theme, setTheme] = useState('vs-dark');
+  const [showTagModal, setShowTagModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   // const activeFile = files.find(f => f.id === activeFileId) || files[0];
@@ -89,8 +97,17 @@ export default function EditorPane({
             </button>
           )}
         </div>
-
+          
         <div className="flex items-center space-x-2">
+          <button
+            onClick={ () => setShowTagModal(true) }
+            className="flex items-center space-x-1 px-2 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
+            title="Add new file"
+          >
+            <TagIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Specify Tags</span>
+          </button>
+
           <select
             value={activeFile?.language || language}
             onChange={(e) => {
@@ -162,6 +179,15 @@ export default function EditorPane({
             <DocumentPlusIcon className="w-4 h-4" />
             <span className="hidden sm:inline">New</span>
           </button>
+
+          <button
+            onClick={openFile}
+            className="flex items-center space-x-1 px-2 py-1 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
+            title="Add new file"
+          >
+            <DocumentIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Open</span>
+          </button>
         </div>
       </div>
 
@@ -220,6 +246,17 @@ export default function EditorPane({
           onClick={() => setShowSettings(false)}
         />
       )}
+
+      {showTagModal && (
+        <TagAssignmentModal
+          tags={tags}
+          files={files}
+          tagToFileMap={tagToFileMap}
+          setTagToFileMap={setTagToFileMap}
+          onClose={() => setShowTagModal(false)}
+        />
+      )}
     </div>
+    
   );
 }

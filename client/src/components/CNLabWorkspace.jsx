@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Panel, PanelGroup } from 'react-resizable-panels';
+import axios from 'axios';
 import Header from './Header';
 import EditorPane from './EditorPane';
 import QuestionPane from './QuestionPane';
 import TerminalPane from './TerminalPane';
+import FileSelectorModal from './EditorPane/fileSelectorModal';
 import ResizeHandle from './shared/ResizeHandle';
 import { useIsMobile } from './utils/useIsMobile';
 import axios from 'axios';
@@ -30,7 +32,7 @@ const MobileTabs = ({ activeTab, setActiveTab, tabs }) => (
 );
 
 // Helper functions
-const getCurrentUser = () => 'simple-sid';
+const getCurrentUser = () => 'testuser123'; // replace with jwt
 const getCurrentDateTime = () => {
   const now = new Date();
   return now.toISOString().slice(0, 19).replace('T', ' ');
@@ -42,10 +44,24 @@ export default function CNLabWorkspace() {
   const [language, setLanguage] = useState('c');
   const [showQuestion, setShowQuestion] = useState(true);
   const [showTerminal, setShowTerminal] = useState(false);
-  const [currentWorkingDir, setCurrentWorkingDir] = useState(''); // Track current directory
+  const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+  const [files, setFiles] = useState([]);
+  const [fileNo, setFileNo] = useState(1);
+  const [tagToFileMap, setTagToFileMap] = useState({}); // Example: { 'server1': 'server_file.c', 'client2': 'client_impl.c' }
+  const [currentWorkingDir, setCurrentWorkingDir] = useState('/home/labuser'); // Track current directory
   const [saveStatus, setSaveStatus] = useState('idle'); //track autosave status
+  const [activeFileId, setActiveFileId] = useState('server');
+  const [showFileModal, setShowFileModal] = useState(false);
+  const [availableFiles, setAvailableFiles] = useState([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testCaseResults, setTestCaseResults] = useState([]);
   const panelRef = useRef(null);
   // const [isSubmitted, setIsSubmitted] = useState(false);
+
+  useEffect(() => {
+    console.log(currentWorkingDir);
+  }, [currentWorkingDir]);
 
   // Load questions from public/questionPool.json
   const [questions, setQuestions] = useState([]);
@@ -56,9 +72,44 @@ export default function CNLabWorkspace() {
       .catch(err => console.error('Error loading questions:', err));
   }, []);
 
-  const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
-  
-  const [files, setFiles] = useState([]);
+  //tags for diff server and client codes
+  function getTagsFromQuestion(question) {
+    if (!question) return [];
+
+    const tags = [];
+
+    const serverCount = Object.keys(question.precode || {}).length;
+    const clientCount = Object.keys(question.clientPrecode || {}).length;
+
+    if (serverCount === 1) {
+      tags.push('server');
+    } else {
+      for (let i = 1; i <= serverCount; i++) {
+        tags.push(`server${i}`);
+      }
+    }
+
+    if (clientCount === 1) {
+      tags.push('client');
+    } else {
+      for (let i = 1; i <= clientCount; i++) {
+        tags.push(`client${i}`);
+      }
+    }
+
+    return tags;
+  }
+  const tags = useMemo(() => {
+  if (
+    !Array.isArray(questions) ||
+    questions.length === 0 ||
+    !questions[activeQuestionIdx]
+  ) return [];
+
+  return getTagsFromQuestion(questions[activeQuestionIdx]);
+}, [questions, activeQuestionIdx]);
+
+
   useEffect(() => {
     fetch('/codeFiles.json')
       .then(res => res.json())
@@ -66,7 +117,7 @@ export default function CNLabWorkspace() {
         // Ensure each file has a .path property (default to name if not present)
         setFiles(data.map(f => ({
           ...f,
-          path: f.path || f.name // always set path
+          path: `${currentWorkingDir}/${f.name}` // always set path
         })));
       })
       .catch(err => console.error("Error loading files:", err));
@@ -122,7 +173,7 @@ export default function CNLabWorkspace() {
         return {
           id: filename.replace(/\.[^/.]+$/, ''),
           name: filename.split('/').pop(), // just the filename
-          path: filename, // full relative path
+          path: `${currentWorkingDir}/${filename}`, // full relative path
           language: lang,
           code: code
         };
@@ -156,24 +207,79 @@ export default function CNLabWorkspace() {
   }, [files, activeFileId]);
 
   const addNewFile = () => {
+    const fileName = `new_file_${fileNo}.${language === 'c' ? 'c' : language === 'python' ? 'py' : 'txt'}`;
+    
+    const confirmCreate = window.confirm(
+      `📁 This new file will be created in:\n\n  ${currentWorkingDir}\n\nFilename: ${fileName}\n\nIf you'd like to save it elsewhere, please change the directory in your terminal first.\n\nContinue?`
+    );
+
+    if (!confirmCreate) return;
+    setFileNo(fileNo+1);
+
     const timestamp = Date.now();
     const newId = `file_${timestamp}`;
-    const extension = language === 'c' ? 'c' :
-                      language === 'python' ? 'py' : 'txt';
     const template = language === 'c' ? 
       `"""\nNew C File\nAuthor: ${getCurrentUser()}\nCreated: ${getCurrentDateTime()} UTC\n"""\n\n# Your code here\n` :
       `// New ${language} file\n// Author: ${getCurrentUser()}\n// Created: ${getCurrentDateTime()} UTC\n\n`;
+
     setFiles(prevFiles => [
       ...prevFiles, 
       {
         id: newId,
-        name: `new_file_1.${extension}`,
-        path: `new_file_1.${extension}`,
+        name: fileName,
+        path: `${currentWorkingDir}/${fileName}`,
         code: template,
         language
       }
     ]);
     setActiveFileId(newId);
+  };
+
+  const openFile = async () => {
+    try {
+      const response = await axios.get('http://localhost:5001/api/file/list-files', {
+        params: { cwd: currentWorkingDir }
+      });
+      setAvailableFiles(response.data.files);
+      setShowFileModal(true); // show modal
+    } catch (err) {
+      console.error("Failed to open file:", err);
+      alert("Could not load file list.");
+    }
+  };
+
+  const handleFileSelect = async (selected) => {
+    setShowFileModal(false);
+    if (!selected) return;
+
+    const alreadyOpen = files.some(f => f.name === selected && f.path === `${currentWorkingDir}/${selected}`);
+    if (alreadyOpen) {
+      alert(`⚠️ File "${selected}" is already open in the editor.\n\nPlease choose a different file.`);
+      return;
+    }
+
+    try {
+      const res = await axios.get('http://localhost:5001/api/file/read-file', {
+        params: { filename: selected, cwd: currentWorkingDir }
+      });
+
+      const code = res.data.code;
+      const newId = `file_${Date.now()}`;
+      setFiles(prev => [
+        ...prev,
+        {
+          id: newId,
+          name: selected,
+          path: `${currentWorkingDir}/${selected}`,
+          code,
+          language: selected.endsWith('.py') ? 'python' : 'c'
+        }
+      ]);
+      setActiveFileId(newId);
+    } catch (err) {
+      console.error("Error loading file content:", err);
+      alert("Failed to load file content.");
+    }
   };
 
   const handleCloseFile = (fileId) => {
@@ -364,12 +470,53 @@ export default function CNLabWorkspace() {
     setShowTerminal(true);
     window.dispatchEvent(new CustomEvent('stop-all-processes'));
   };
-  const handleSubmit = () => {
-    // setIsSubmitting(true);
-    setShowTerminal(true);
 
-    handleRun();
+  //Handle Sumission - eval of test cases and log to DB
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+
+    try {
+      const question = questions[activeQuestionIdx];
+      const sourceCode = Object.fromEntries(files.map(f => [f.name, f.code]));
+
+      // Step 1 (mocked for now)
+      // const evalRes = await fetch('/api/submission/eval', { ... });
+      // const { passedCount, totalTestCases } = await evalRes.json();
+
+      const passedCount = testCaseResults.filter(tc => tc.status === 'PASS').length || 5;
+      const totalTestCases = testCaseResults.length || 5; // 5/5 for testing
+
+      // Step 2: Submit to DB
+      const payload = {
+        userId: getCurrentUser(),
+        questionId: question.id,
+        module: question.module || 'Week1', //Assume module name for now
+        sourceCode,
+        language,
+        passedCount,
+        totalTestCases,
+      };
+
+      const res = await fetch('http://localhost:5001/api/submission/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert('✅ Submitted successfully!');
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err) {
+      console.error('[Frontend] Submission error:', err);
+      alert('❌ Failed to submit.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
   const handleTimeUp = () => {
     alert("[Time] Time's up! Your code will be automatically submitted.");
     handleSubmit();
@@ -490,6 +637,7 @@ export default function CNLabWorkspace() {
                   activeFile={activeFile}
                   updateCode={updateCode}
                   addNewFile={addNewFile}
+                  openFile={openFile}
                   onRun={handleRun}
                   onEvaluate={handleEvaluate}
                   onSubmit={handleSubmit}
@@ -504,6 +652,9 @@ export default function CNLabWorkspace() {
                   saveStatus={saveStatus}
                   renameFile={renameFile}
                   updateFileLanguage={updateFileLanguage}
+                  tags={tags}
+                  tagToFileMap={tagToFileMap}
+                  setTagToFileMap={setTagToFileMap}
                 />
               </Panel>
             </PanelGroup>
@@ -518,9 +669,21 @@ export default function CNLabWorkspace() {
             id="terminal-panel"
             order={3}
           >
-            <TerminalPane onClose={() => setShowTerminal(false)} termVisible={showTerminal} />
+            <TerminalPane 
+              onClose={() => setShowTerminal(false)} 
+              termVisible={showTerminal} 
+              setCurrentWorkingDir={setCurrentWorkingDir} 
+            />
           </Panel>
         </PanelGroup>
+
+        {showFileModal && (
+          <FileSelectorModal
+            files={availableFiles}
+            onSelect={handleFileSelect}
+            onClose={() => setShowFileModal(false)}
+          />
+        )}
       </div>
     </div>
   );
