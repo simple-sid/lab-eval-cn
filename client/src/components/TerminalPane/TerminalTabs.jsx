@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PlusIcon, CommandLineIcon } from '@heroicons/react/24/outline';
 
 export default function TerminalTabs({ 
   terminals, 
   activeTerminalId, 
   setActiveTerminalId, 
   closeTerminal,
+  onClose,
   setTerminals,
   addTerminal
 }) {
@@ -35,12 +36,12 @@ export default function TerminalTabs({
   };
 
   return (
-    <div className="flex bg-gray-800 border-b border-gray-700 overflow-x-auto">
+    <div className="flex bg-gray-800 border-b border-gray-700 overflow-x-auto min-h-10">
       {terminals.map((terminal) => (
         <div
           key={terminal.id}
           className={`
-            group relative flex items-center min-w-0 px-3 py-2 border-r border-gray-700 cursor-pointer transition-colors
+            group relative flex justify-between items-center min-w-0 px-3 py-2 border-r border-gray-700 cursor-pointer transition-colors
             ${activeTerminalId === terminal.id 
               ? 'bg-gray-900 text-green-400' 
               : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -48,8 +49,8 @@ export default function TerminalTabs({
           `}
           onClick={() => setActiveTerminalId(terminal.id)}
         >
-          <div className={`w-2 h-2 rounded-full mr-2 ${
-            activeTerminalId === terminal.id ? 'bg-green-400' : 'bg-gray-500'
+          <CommandLineIcon className={`w-5 h-5 mr-2 ${
+            activeTerminalId === terminal.id ? 'text-green-400' : 'text-gray-500'
           }`} />
           
           {/* edit terminal name */}
@@ -95,6 +96,18 @@ export default function TerminalTabs({
       >
         <PlusIcon className="w-4 h-4" />
       </button>
+
+      <div className="ml-auto flex items-center space-x-2">
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+            title="Close terminal"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

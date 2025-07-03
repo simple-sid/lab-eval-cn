@@ -2,11 +2,11 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import Question from '../models/Question.js';
+import { Question } from '../models/Question.js';
 
 const router = express.Router();
 
-// multer for file uploads
+// Multer setup for image uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
@@ -36,26 +36,23 @@ const upload = multer({
   }
 });
 
-// POST api/questions - create a new question with image upload
-router.post('/', upload.single('image'), async (req, res) => {
+// POST api/questions - create a new question
+router.post('/', async (req, res) => {
   try {
     const questionData = { ...req.body };
     
     // Parse JSON strings back to objects
-    ['precode', 'clientPrecode', 'solution', 'clientSolution', 'testCases'].forEach(field => {
-      if (questionData[field]) {
-        try {
-          questionData[field] = JSON.parse(questionData[field]);
-        } catch (e) {
-          console.error(`Error parsing ${field}:`, e);
-        }
-      }
-    });
-      // If we have a file, set the image path
-    if (req.file) {
-      questionData.image = `/uploads/${req.file.filename}`;
-    }
+    // ['precode', 'clientPrecode', 'solution', 'clientSolution', 'testCases'].forEach(field => {
+    //   if (questionData[field]) {
+    //     try {
+    //       questionData[field] = JSON.parse(questionData[field]);
+    //     } catch (e) {
+    //       console.error(`Error parsing ${field}:`, e);
+    //     }
+    //   }
+    // });
 
+    // Create and save the question
     const question = new Question(questionData);
     await question.save();
     
@@ -68,7 +65,25 @@ router.post('/', upload.single('image'), async (req, res) => {
   }
 });
 
-// list all questions
+// POST api/questions/upload-image - handle image uploads from Tiptap editor
+router.post('/upload-image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image uploaded' });
+    }
+    
+    // Return the URL to the uploaded image
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ 
+      success: true, 
+      url: imageUrl
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET api/questions - list all questions
 router.get('/', async (req, res) => {
   try {
     const questions = await Question.find();
@@ -78,7 +93,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// delete a question
+// DELETE api/questions/:id - delete a question
 router.delete('/:id', async (req, res) => {
   try {
     const deletedQuestion = await Question.findByIdAndDelete(req.params.id);
@@ -91,7 +106,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// get a specific question
+// GET api/questions/:id - get a specific question
 router.get('/:id', async (req, res) => {
   try {
     const question = await Question.findById(req.params.id);

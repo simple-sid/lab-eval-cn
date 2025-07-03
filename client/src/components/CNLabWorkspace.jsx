@@ -406,10 +406,9 @@ export default function CNLabWorkspace() {
       
       const clientCount = currentQuestion.clientCount || 1;
       const clientDelay = currentQuestion.clientDelay || 0.5;
-      const evalType = currentQuestion.evalType || 'default';
 
       console.log(`EVALUATE: Sending ${codeType} evaluation request:`, { 
-        evaluationScript, testCases, clientCount, clientDelay, evalType, codeType 
+        evaluationScript, testCases, clientCount, clientDelay, codeType 
       });
 
       const response = await axios.post('http://localhost:5001/api/run-evaluate', {
@@ -420,7 +419,6 @@ export default function CNLabWorkspace() {
         testCases,
         clientCount,
         clientDelay,
-        evalType,
         codeType
       });
       

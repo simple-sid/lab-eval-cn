@@ -39,7 +39,6 @@ router.post('/run-evaluate', async (req, res) => {
       testCases = [],
       clientCount = 1,
       clientDelay = 0.5,
-      evalType = 'default'
     } = req.body;
     if (!filename || !code || !language) {
       return res.status(400).json({ error: 'Missing required fields (filename, code, language)' });
@@ -53,7 +52,6 @@ router.post('/run-evaluate', async (req, res) => {
       testCases,
       clientCount,
       clientDelay,
-      evalType
     });
     res.json({ success: true, ...result });
   } catch (err) {

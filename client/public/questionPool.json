@@ -19,7 +19,7 @@
         "evaluationScript": "server_evaluator.py",
         "clientCount": 1,
         "clientDelay": 0.5,        
-        "evalType": "datetime",        
+                
         "testCases": {
             "server": [
                 {
@@ -63,7 +63,8 @@
                     "messageSize": 128,
                     "maxResponseTime": 0.5
                 }
-            ],            "client": [
+            ],            
+            "client": [
                 {
                     "serverScript": [
                         {"response": "Mon Jun 25 10:30:45 2025\n"}
@@ -92,7 +93,8 @@
                     "points": 5,
                     "clientCount": 3
                 },
-                {                    "serverScript": [
+                {                    
+                    "serverScript": [
                         {"response": "Enter server command:"},
                         {"expect": "GET_TIME", "response": "Server time: Mon Jun 25 10:45:00 2025\n"},
                         {"expect": "EXIT", "response": "Goodbye!\n"}
@@ -106,7 +108,7 @@
                 }
             ]
         },
-        "image": "/public/multiple_clients.jpg"
+        "image": "/multiple_clients.jpg"
     },
     {
         "id": "cn-q2",
@@ -128,7 +130,7 @@
         "evaluationScript": "server_evaluator.py",
         "clientCount": 1, 
         "clientDelay": 0.5,        
-        "evalType": "arithmetic",
+                
         "testCases": {
             "server": [
                 {
@@ -225,7 +227,7 @@
                 }
             ]
         },
-        "image": "/public/tcp_ladder_states.png"
+        "image": "/tcp_ladder_states.png"
     }
 
 ]

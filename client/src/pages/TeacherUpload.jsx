@@ -1,29 +1,53 @@
 import { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import TiptapEditor from '../components/TiptapEditor';
+import { 
+  ArrowLeftIcon,
+  PlusIcon
+} from '@heroicons/react/24/outline';
+import { TabButton, FormSection, FormLabel, ErrorMessage, TestCaseSection } from '../components/FormComponents'
+import Editor from "@monaco-editor/react";
 
+// Updated initial question including evaluation settings and matchType in testCases
 const initialQuestion = {
   title: '',
   description: '',
-  image: '',
   precode: { 'server.c': '// Add starter code here\n' },
   clientPrecode: { 'client.c': '// Add starter code here\n' },
   solution: { 'server.c': '// Add solution code here\n' },
   clientSolution: { 'client.c': '// Add solution code here\n' },
-  testCases: [
-    { input: '', expectedOutput: '', description: '', points: 5 }
-  ],
-  evaluationScript: 'evaluate_server1.sh'
+  testCases: {
+    server: [{ input: '', expectedOutput: '', description: '', points: 5, matchType: 'exact' }],
+    client: []
+  },
+  evaluationScript: '',
+  clientCount: 0,
+  clientDelay: 0,
 };
 
 export default function TeacherUpload() {
-  const [question, setQuestion] = useState(initialQuestion);
   const [message, setMessage] = useState('');
   const [codeType, setCodeType] = useState('precode');
   const [isLoading, setIsLoading] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [activeTab, setActiveTab] = useState('upload');
-  const [selectedImage, setSelectedImage] = useState(null);
+
+  // Initialize react-hook-form
+  const { 
+    register, 
+    handleSubmit: handleFormSubmit, 
+    formState: { errors }, 
+    control,
+    reset,
+    setValue,
+    watch
+  } = useForm({
+    defaultValues: initialQuestion
+  });
+
+  const watchedValues = watch(); // Get current form values for code editors
 
   useEffect(() => {
     fetchQuestions();
@@ -37,106 +61,114 @@ export default function TeacherUpload() {
       console.error('Error fetching questions:', err);
     }
   };
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setQuestion(q => ({ ...q, [name]: value }));
-  };
   
-  const handleImageChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedImage(e.target.files[0]);
-      
-      // Create a preview URL and store it in the question state
-      const imageUrl = URL.createObjectURL(e.target.files[0]);
-      setQuestion(q => ({ ...q, image: imageUrl }));
-    }
+  const handleTestCaseChange = (type, idx, field, value) => {
+    const testCases = [...(watchedValues.testCases[type] || [])];
+    testCases[idx][field] = field === 'points' ? parseInt(value) || 0 : value;
+    setValue(`testCases.${type}`, testCases);
   };
 
-  const handleTestCaseChange = (idx, field, value) => {
-    setQuestion(q => {
-      const testCases = [...q.testCases];
-      testCases[idx][field] = field === 'points' ? parseInt(value) || 0 : value;
-      return { ...q, testCases };
-    });
+  const addTestCase = (type) => {
+    const testCases = [...(watchedValues.testCases[type] || [])];
+    testCases.push({ input: '', expectedOutput: '', description: '', points: 5, matchType: 'exact' });
+    setValue(`testCases.${type}`, testCases);
   };
 
-  const addTestCase = () => {
-    setQuestion(q => ({ 
-      ...q, 
-      testCases: [...q.testCases, { input: '', expectedOutput: '', description: '', points: 5 }] 
-    }));
-  };
-
-  const removeTestCase = (idx) => {
-    setQuestion(q => ({ 
-      ...q, 
-      testCases: q.testCases.filter((_, i) => i !== idx) 
-    }));
+  const removeTestCase = (type, idx) => {
+    const testCases = [...(watchedValues.testCases[type] || [])].filter((_, i) => i !== idx);
+    setValue(`testCases.${type}`, testCases);
   };
 
   const handleCodeChange = (type, file, code) => {
-    setQuestion(q => ({
-      ...q,
-      [type]: { ...q[type], [file]: code }
-    }));
+    const currentFiles = watchedValues[type] || {};
+    const updatedFiles = { ...currentFiles, [file]: code };
+    setValue(type, updatedFiles);
   };
 
   const addCodeFile = (type) => {
-    const fileName = prompt(`Enter new file name for ${type}:`);
-    if (fileName && fileName.trim()) {
-      setQuestion(q => ({
-        ...q,
-        [type]: { ...q[type], [fileName]: '// New file\n' }
-      }));
+    let fileName = prompt(`Enter new file name for ${type} (with extension, e.g. server.c):`);
+    if (!fileName) return;
+    fileName = fileName.trim();
+    // Prevent files without extension
+    if (!fileName.includes('.')) {
+      alert('Please include a file extension, e.g. server.c');
+      return;
     }
+    const files = { ...watchedValues[type] };
+    if (files[fileName]) {
+      alert('File already exists!');
+      return;
+    }
+    files[fileName] = '// New file\n';
+    setValue(type, files);
   };
 
   const deleteCodeFile = (type, file) => {
     if (confirm(`Delete ${file} from ${type}?`)) {
-      setQuestion(q => {
-        const newFiles = { ...q[type] };
-        delete newFiles[file];
-        return { ...q, [type]: newFiles };
-      });
+      const files = { ...watchedValues[type] };
+      delete files[file];
+      setValue(type, files);
     }
   };
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  
+  const onSubmit = async (data) => {
     setIsLoading(true);
-    
+
     try {
-      // For a simple demo, we'll just use a FormData object
-      const formData = new FormData();
-      
-      // Add all question data except image
-      Object.keys(question).forEach(key => {
-        if (key !== 'image') {
-          if (typeof question[key] === 'object') {
-            formData.append(key, JSON.stringify(question[key]));
-          } else {
-            formData.append(key, question[key]);
-          }
+      // Process the description: upload any base64 images and replace them with URLs
+      let processedDescription = data.description;
+      const base64ImagePattern = /src="data:image\/(.*?);base64,(.*?)"/g;
+      const matches = [...processedDescription.matchAll(base64ImagePattern)];
+
+      for (const match of matches) {
+        const fullMatch = match[0];
+        const mimeType = match[1];
+        const base64Data = match[2];
+
+        // Convert base64 to file
+        const byteCharacters = atob(base64Data);
+        const byteArrays = [];
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteArrays.push(byteCharacters.charCodeAt(i));
         }
-      });
-      
-      // Add the image file if one was selected
-      if (selectedImage) {
-        formData.append('image', selectedImage);
+        const byteArray = new Uint8Array(byteArrays);
+        const blob = new Blob([byteArray], { type: `image/${mimeType}` });
+        const file = new File([blob], `image-${Date.now()}.${mimeType}`, { type: `image/${mimeType}` });
+        
+        // Upload the image
+        const formData = new FormData();
+        formData.append('image', file);
+        const response = await axios.post('http://localhost:5001/api/questions/upload-image', formData);
+        
+        // Replace the base64 string with the returned URL
+        processedDescription = processedDescription.replace(fullMatch, `src="${response.data.url}"`);
       }
-      
-      // In a real implementation, the server would save the image and update the image path
-      // For demo purposes, we'll assume the server handles this correctly
-      await axios.post('http://localhost:5001/api/questions', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
+
+      // Remove unnecessary fields (like evalType) that are not defined in the schema
+      const { evalType, ...payload } = data;
+
+      // Build the payload without stringifying object fields. Our backend expects
+      // precode, clientPrecode, solution, clientSolution, and testCases to be objects.
+      const questionData = {
+        ...payload,
+        description: processedDescription,
+        precode: data.precode,
+        clientPrecode: data.clientPrecode,
+        solution: data.solution,
+        clientSolution: data.clientSolution,
+        testCases: data.testCases,
+        moduleType: "CNQuestion",
+        lab: "123" // Replace with a valid lab ID if needed
+      };
+
+      console.log("Submitting questionData:", questionData); // Debug log
+
+      await axios.post('http://localhost:5001/api/questions', questionData);
       setMessage('Question uploaded successfully!');
-      setQuestion(initialQuestion);
-      setSelectedImage(null);
+      reset(initialQuestion);
       fetchQuestions();
     } catch (err) {
+      console.error('Upload error:', err.response ? err.response.data : err.message);
       setMessage(`Error: ${err.message}`);
     } finally {
       setIsLoading(false);
@@ -154,277 +186,295 @@ export default function TeacherUpload() {
     }
   };
 
+  function getLanguageFromFilename(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (ext === 'py') return 'python';
+    if (ext === 'js') return 'javascript';
+    if (ext === 'cpp' || ext === 'cc' || ext === 'cxx') return 'cpp';
+    if (ext === 'java') return 'java';
+    if (ext === 'html') return 'html';
+    if (ext === 'css') return 'css';
+    if (ext === 'json') return 'json';
+    return 'c';
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      
-      <div className="container mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-6">Question Upload Portal</h1>
-        
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="flex border-b">
-            <button 
-              className={`px-4 py-2 ${activeTab === 'upload' ? 'bg-indigo-100 text-indigo-700 border-b-2 border-indigo-500' : 'text-gray-600'}`}
-              onClick={() => setActiveTab('upload')}
+      <div className="container mx-auto py-8 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Question Upload Portal</h1>
+            <Link 
+              to="/" 
+              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
             >
-              Upload New Question
-            </button>
-            <button 
-              className={`px-4 py-2 ${activeTab === 'manage' ? 'bg-indigo-100 text-indigo-700 border-b-2 border-indigo-500' : 'text-gray-600'}`}
-              onClick={() => setActiveTab('manage')}
-            >
-              Manage Questions
-            </button>
+              <ArrowLeftIcon className="h-4 w-4 hover:text-blue-700 mr-2" />
+              <div className="hover:text-blue-700">Back to Home</div>
+            </Link>
           </div>
           
-          {activeTab === 'upload' ? (
-            <div className="p-6">
-              {message && (
-                <div className={`p-4 mb-4 ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'} rounded`}>
-                  {message}
-                </div>
-              )}
-              
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Question Title</label>
-                  <input 
-                    name="title" 
-                    value={question.title} 
-                    onChange={handleChange} 
-                    className="w-full border rounded p-2" 
-                    required 
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <textarea 
-                    name="description" 
-                    value={question.description} 
-                    onChange={handleChange} 
-                    className="w-full border rounded p-2" 
-                    rows={4} 
-                    required 
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload Image (optional)</label>
-                    <input 
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange} 
-                      className="w-full border rounded p-2" 
-                    />
-                    {question.image && (
-                      <div className="mt-2 relative">
-                        <img 
-                          src={question.image} 
-                          alt="Preview" 
-                          className="h-24 object-contain border rounded"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedImage(null);
-                            setQuestion(q => ({ ...q, image: '' }));
-                          }}
-                          className="absolute top-1 right-1 bg-red-100 text-red-700 rounded-sm p-1 text-xs"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
+          <div className="bg-white shadow-sm rounded-lg overflow-hidden border">
+            <div className="flex border-b">
+              <TabButton active={activeTab === 'upload'} onClick={() => setActiveTab('upload')}>
+                Upload New Question
+              </TabButton>
+              <TabButton active={activeTab === 'manage'} onClick={() => setActiveTab('manage')}>
+                Manage Questions
+              </TabButton>
+            </div>
+            
+            {activeTab === 'upload' ? (
+              <div className="p-6">
+                {message && (
+                  <div 
+                    className={`p-4 mb-6 rounded-md ${
+                      message.includes('Error') ? 'bg-red-50 text-red-700 border-l-4 border-red-500' : 'bg-green-50 text-green-700 border-l-4 border-green-500'
+                    }`}
+                  >
+                    {message}
                   </div>
+                )}
+                
+                <form onSubmit={handleFormSubmit(onSubmit)} className="space-y-8">
+                  <FormSection title="Basic Information">
+                    <div>
+                      <FormLabel htmlFor="title" required>Question Title</FormLabel>
+                      <input 
+                        id="title"
+                        {...register('title', { 
+                          required: "Title is required", 
+                          minLength: { value: 3, message: "Title must be at least 3 characters" } 
+                        })}
+                        className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Enter a descriptive title"
+                      />
+                      {errors.title && <ErrorMessage>{errors.title.message}</ErrorMessage>}
+                    </div>
+                    
+                    <div>
+                      <FormLabel htmlFor="description" required>Question Description</FormLabel>
+                      <Controller
+                        name="description"
+                        control={control}
+                        rules={{ required: "Description is required" }}
+                        render={({ field }) => (
+                          <TiptapEditor value={field.value} onChange={field.onChange} />
+                        )}
+                      />
+                      {errors.description && <ErrorMessage>{errors.description.message}</ErrorMessage>}
+                    </div>
+                  </FormSection>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Evaluation Script</label>
-                    <select
-                      name="evaluationScript" 
-                      value={question.evaluationScript} 
-                      onChange={handleChange} 
-                      className="w-full border rounded p-2"
-                    >
-                      <option value="evaluate_server1.sh">evaluate_server1.sh</option>
-                      <option value="evaluate_server2.sh">evaluate_server2.sh</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Code Files</label>
-                  <div className="border rounded p-4 bg-gray-50">
-                    <div className="flex space-x-2 mb-4">
+                  <FormSection title="Evaluation Settings">
+                    <div className="mb-4">
+                      <FormLabel htmlFor="evaluationScript">Evaluation Script (optional)</FormLabel>
+                      <Controller
+                        name="evaluationScript"
+                        control={control}
+                        render={({ field }) => (
+                          <Editor 
+                            height="200px"
+                            language="javascript"
+                            value={field.value}
+                            onChange={field.onChange}
+                            options={{
+                              minimap: { enabled: false },
+                              automaticLayout: true,
+                              fontSize: 14
+                            }}
+                          />
+                        )}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <FormLabel htmlFor="clientCount">Client Count</FormLabel>
+                        <input 
+                          id="clientCount"
+                          type="number"
+                          {...register('clientCount', { valueAsNumber: true })}
+                          className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Enter client count"
+                        />
+                      </div>
+                      <div>
+                        <FormLabel htmlFor="clientDelay">Client Delay (ms)</FormLabel>
+                        <input 
+                          id="clientDelay"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          {...register('clientDelay', { valueAsNumber: true })}
+                          className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Enter delay in ms"
+                        />
+                      </div>
+                      <div>
+                        <FormLabel htmlFor="matchType">Default Match Type</FormLabel>
+                        <input
+                          id="matchType"
+                          type="text"
+                          value=""
+                          disabled
+                          className="w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-400 cursor-not-allowed"
+                          placeholder="Set per test case below"
+                        />
+                      </div>
+                    </div>
+                  </FormSection>
+                  
+                  <FormSection title="Code Files">
+                    <div className="flex space-x-2 mb-4 flex-wrap">
                       {['precode', 'clientPrecode', 'solution', 'clientSolution'].map(type => (
                         <button
-                          key={type}
+                          key={ type}
                           type="button"
                           onClick={() => setCodeType(type)}
-                          className={`px-3 py-1 rounded ${codeType === type ? 'bg-indigo-500 text-white' : 'bg-gray-200'}`}
+                          className={`px-3 py-1.5 rounded-md mb-2 transition-colors ${
+                            codeType === type 
+                              ? 'bg-blue-600 text-white shadow-sm' 
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
                         >
                           {type.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                         </button>
                       ))}
                     </div>
                     
-                    <div className="mb-2 flex justify-between">
-                      <span className="text-sm text-gray-600">Files for {codeType}</span>
-                      <button
-                        type="button"
-                        onClick={() => addCodeFile(codeType)}
-                        className="text-sm bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
-                      >
-                        Add File
-                      </button>
+                    <div className="bg-gray-50 rounded-lg p-4 border">
+                      <div className="mb-3 flex justify-between items-center">
+                        <span className="font-medium text-gray-700">
+                          Files for {codeType.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => addCodeFile(codeType)}
+                          className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"
+                        >
+                          <PlusIcon className="w-3 h-3 mr-1" />
+                          <span>Add File</span>
+                        </button>
+                      </div>
+                      
+                      {/* Render Monaco Editor for each file */}
+                      {Object.entries(watchedValues[codeType] || {}).map(([filename, code]) => (
+                        <div key={filename} className="mb-4 rounded-md overflow-hidden border border-gray-300 bg-white">
+                          <div className="flex justify-between items-center px-4 py-2 bg-gray-100">
+                            <div className="flex items-center">
+                              <svg className="h-4 w-4 text-gray-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              <span className="font-mono text-sm">{filename}</span>
+                            </div>
+                            <button 
+                              type="button"
+                              onClick={() => deleteCodeFile(codeType, filename)}
+                              className="text-gray-500 hover:text-red-500"
+                            >
+                              <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="h-60">
+                            <Editor
+                              height="100%"
+                              language={getLanguageFromFilename(filename)}
+                              value={typeof code === 'string' ? code : ''}
+                              onChange={(value) => handleCodeChange(codeType, filename, value ?? '')}
+                              options={{
+                                minimap: { enabled: false },
+                                scrollBeyondLastLine: false,
+                                fontSize: 14,
+                                tabSize: 2,
+                                automaticLayout: true
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    
-                    {Object.entries(question[codeType] || {}).map(([filename, code]) => (
-                      <div key={filename} className="mb-3 border rounded bg-white">
-                        <div className="flex justify-between items-center bg-gray-100 px-3 py-1">
-                          <span className="font-mono text-sm">{filename}</span>
-                          <button 
-                            type="button"
-                            onClick={() => deleteCodeFile(codeType, filename)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                        <textarea
-                          value={code}
-                          onChange={(e) => handleCodeChange(codeType, filename, e.target.value)}
-                          className="w-full p-3 font-mono text-sm h-40"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Test Cases</label>
+                  </FormSection>
                   
-                  <div className="space-y-3">
-                    {question.testCases.map((tc, idx) => (
-                      <div key={idx} className="border p-4 rounded bg-gray-50">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4>Test Case #{idx + 1}</h4>
-                          <button
-                            type="button"
-                            onClick={() => removeTestCase(idx)}
-                            disabled={question.testCases.length === 1}
-                            className={`text-red-500 ${question.testCases.length === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <input 
-                              value={tc.input} 
-                              onChange={e => handleTestCaseChange(idx, 'input', e.target.value)} 
-                              placeholder="Input" 
-                              className="w-full border p-2 mb-2" 
-                              required 
-                            />
-                          </div>
-                          
-                          <div>
-                            <input 
-                              value={tc.expectedOutput} 
-                              onChange={e => handleTestCaseChange(idx, 'expectedOutput', e.target.value)} 
-                              placeholder="Expected Output" 
-                              className="w-full border p-2 mb-2" 
-                              required 
-                            />
-                          </div>
-                          
-                          <div>
-                            <input 
-                              value={tc.description} 
-                              onChange={e => handleTestCaseChange(idx, 'description', e.target.value)} 
-                              placeholder="Description" 
-                              className="w-full border p-2 mb-2" 
-                            />
-                          </div>
-                          
-                          <div>
-                            <input 
-                              type="number" 
-                              value={tc.points} 
-                              onChange={e => handleTestCaseChange(idx, 'points', e.target.value)} 
-                              placeholder="Points" 
-                              className="w-20 border p-2 mb-2" 
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    
-                    <button
-                      type="button"
-                      onClick={addTestCase}
-                      className="text-indigo-600"
+                  <FormSection title="Test Cases">
+                    <TestCaseSection
+                      type="server"
+                      testCases={watchedValues.testCases?.server || []}
+                      addTestCase={addTestCase}
+                      removeTestCase={removeTestCase}
+                      handleTestCaseChange={handleTestCaseChange}
+                      showMatchTypeSelect
+                    />
+                    <TestCaseSection
+                      type="client"
+                      testCases={watchedValues.testCases?.client || []}
+                      addTestCase={addTestCase}
+                      removeTestCase={removeTestCase}
+                      handleTestCaseChange={handleTestCaseChange}
+                      showMatchTypeSelect
+                    />
+                  </FormSection>
+                  
+                  <div className="pt-4 border-t">
+                    <button 
+                      type="submit" 
+                      disabled={isLoading}
+                      className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-70"
                     >
-                      + Add Test Case
+                      {isLoading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Uploading...
+                        </>
+                      ) : 'Upload Question'}
                     </button>
                   </div>
-                </div>
+                </form>
+              </div>
+            ) : (
+              <div className="p-6">
+                <h2 className="text-lg font-medium text-gray-900 mb-4">Existing Questions</h2>
                 
-                <button 
-                  type="submit" 
-                  disabled={isLoading}
-                  className={`w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 ${isLoading ? 'opacity-70' : ''}`}
-                >
-                  {isLoading ? 'Uploading...' : 'Upload Question'}
-                </button>
-              </form>
-            </div>
-          ) : (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Existing Questions</h2>
-              
-              {questions.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No questions available. Start by creating one!</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Test Cases</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Eval Script</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {questions.map((q) => (
-                        <tr key={q._id}>
-                          <td className="px-6 py-4 whitespace-nowrap">{q.title}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{q.testCases?.length || 0}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{q.evaluationScript}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <button
-                              onClick={() => deleteQuestion(q._id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Delete
-                            </button>
-                          </td>
+                {questions.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No questions available. Start by creating one!</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Server Tests</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client Tests</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        
-        <div className="mt-4 text-center">
-          <Link to="/workspace" className="text-indigo-600 hover:text-indigo-800">
-            Return to Student Workspace
-          </Link>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {questions.map((q) => (
+                          <tr key={q._id}>
+                            <td className="px-6 py-4 whitespace-nowrap">{q.title}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{q.testCases?.server?.length || 0}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{q.testCases?.client?.length || 0}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <button
+                                onClick={() => deleteQuestion(q._id)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

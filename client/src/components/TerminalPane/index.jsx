@@ -2,11 +2,11 @@ import { useState } from 'react';
 import TerminalTabs from './TerminalTabs';
 import TerminalComponent from './Terminal';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  CommandLineIcon,
-  XMarkIcon,
-  PlusIcon
-} from '@heroicons/react/24/outline';
+// import {
+//   CommandLineIcon,
+//   XMarkIcon,
+//   PlusIcon
+// } from '@heroicons/react/24/outline';
 
 export default function TerminalPane({ 
   onClose,
@@ -67,7 +67,7 @@ export default function TerminalPane({
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
-      <div className="flex items-center justify-between py-0.5 px-3 bg-gray-800 border-b border-gray-700">
+      {/* <div className="flex items-center justify-between py-0.5 px-3 bg-gray-800 border-b border-gray-700">
         <div className="flex items-center space-x-3">
           <CommandLineIcon className="w-5 h-5 text-green-400" />
           <h2 className="text-md font-semibold text-white">Terminal</h2>
@@ -84,13 +84,14 @@ export default function TerminalPane({
             </button>
           )}
         </div>
-      </div>
+      </div> */}
 
       <TerminalTabs
         terminals={terminals}
         activeTerminalId={activeTerminalId}
         setActiveTerminalId={setActiveTerminalId}
         closeTerminal={closeTerminal}
+        onClose={onClose}
         setTerminals={setTerminals}
         addTerminal={addTerminal}
       />

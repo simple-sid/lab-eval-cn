@@ -357,7 +357,6 @@ export async function runAndEvaluate({
   testCases = [],
   clientCount = 1,
   clientDelay = 0.5,
-  evalType = 'default',
   codeType = 'server' // Default to server evaluation
 }) {
   // Determine relative directory and workingDir in container
@@ -384,7 +383,6 @@ export async function runAndEvaluate({
       testCases: actualTestCases,  // Pass only the relevant test cases (server or client)
       clientCount,
       clientDelay,
-      evalType,
       codeType
     };
     const testFilePath = `/tmp/.test_data_${userId}.json`;
