@@ -91,13 +91,14 @@ export function initSSHWebSocket(server) {
                 const { type, data, cols, rows } = JSON.parse(message);
 
                 if (type === 'input') {
-                  // Handle Ctrl+C properly by sending SIGINT
-                  if (data === '\u0003') { // Ctrl+C character
-                    stream.write(data);
-                    // Don't automatically kill other processes - let Ctrl+C handle it naturally
-                  } else {
-                    stream.write(data);
-                  }
+                  // // Handle Ctrl+C properly by sending SIGINT
+                  // if (data === '\u0003') { // Ctrl+C character
+                  //   stream.write(data);
+                  //   // Don't automatically kill other processes - let Ctrl+C handle it naturally
+                  // } else {
+                  //   stream.write(data);
+                  // }
+                  stream.write(data);
                 } else if (type === 'resize') {
                   stream.setWindow(rows, cols, 600, 800);
                 }
@@ -122,26 +123,6 @@ export function initSSHWebSocket(server) {
               ws.send(JSON.stringify({ type: 'data', data: errorOutput }));
             }
           });            
-          
-          ws.on('message', (message) => {
-            try {
-              const { type, data, cols, rows } = JSON.parse(message);
-
-              if (type === 'input') {
-                // // Handle Ctrl+C properly by sending SIGINT
-                // if (data === '\u0003') { // Ctrl+C character
-                //   stream.write(data);
-                // } else {
-                //   stream.write(data);
-                // }
-                stream.write(data);
-              } else if (type === 'resize') {
-                stream.setWindow(rows, cols, 600, 800);
-              }
-            } catch (err) {
-              console.error('[WS] Invalid message format:', err);
-            }
-          });
 
           const cleanup = async () => {
             stream.end();

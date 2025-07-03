@@ -146,6 +146,7 @@ const TerminalComponent = ({
     return () => {
       isClosedManually = true;
       wsRef.current?.close();
+      xterm.current.dispose()
     };
   }, [terminalId, wsURL, onSessionEnd]);
 

@@ -8,7 +8,6 @@ import TerminalPane from './TerminalPane';
 import FileSelectorModal from './EditorPane/fileSelectorModal';
 import ResizeHandle from './shared/ResizeHandle';
 import { useIsMobile } from './utils/useIsMobile';
-import axios from 'axios';
 
 const MobileTabs = ({ activeTab, setActiveTab, tabs }) => (
   <div className="flex bg-white border-b border-gray-200 shadow-sm">
@@ -122,11 +121,6 @@ export default function CNLabWorkspace() {
       })
       .catch(err => console.error("Error loading files:", err));
   }, []);
-  
-  const [activeFileId, setActiveFileId] = useState('server');
-  const [isRunning, setIsRunning] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [testCaseResults, setTestCaseResults] = useState({});
 
   // setting test case results
   useEffect(() => {

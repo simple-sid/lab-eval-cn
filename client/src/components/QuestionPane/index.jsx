@@ -174,7 +174,8 @@ export default function QuestionPane({
               </div>
             ))}
           </div>
-        )}          {activeTab === 'testcases' && (
+        )}          
+        {activeTab === 'testcases' && (
           <div className="fade-in-up">
             {console.log('QuestionPane passing to TestSelector:', { 
               question, 
