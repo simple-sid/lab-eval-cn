@@ -16,15 +16,96 @@
         "clientSolution": {
             "client.c": "// Working client code: connects to 127.0.0.1:8080 and prints the received string."
         },
-        "testCases": [
-            {
-                "input": "Client connects to server",
-                "expectedOutput": "Date and time string (e.g., Wed Jun 19 22:10:00 2025)",
-                "description": "Server should send system date-time",
-                "points": 5
-            }
-        ],
-        "evaluationScript": "evaluate_server1.sh",
+        "evaluationScript": "server_evaluator.py",
+        "clientCount": 1,
+        "clientDelay": 0.5,        
+        "evalType": "datetime",        
+        "testCases": {
+            "server": [
+                {
+                    "input": "",
+                    "expectedOutput": "Current date-time",
+                    "matchType": "datetime",
+                    "description": "Server should send system date-time",
+                    "points": 5
+                },
+                {
+                    "input": "",
+                    "expectedOutput": "",
+                    "matchType": "datetime",
+                    "description": "Multiple clients should receive date-time",
+                    "points": 5,
+                    "clientCount": 3
+                },
+                {
+                    "description": "Server should handle invalid inputs gracefully",
+                    "points": 5,
+                    "errorHandling": true,
+                    "errorTests": [
+                        {"input": "INVALID", "expectedOutput": "ERROR", "description": "Invalid command"},
+                        {"input": "!@#$%", "expectedOutput": "ERROR", "description": "Malformed input"}
+                    ]
+                },
+                {
+                    "description": "Server should maintain connection reliability",
+                    "points": 5,
+                    "connectionReliability": true,
+                    "connectionAttempts": 5,
+                    "reconnectDelay": 0.5,
+                    "minSuccessRate": 80
+                },
+                {
+                    "description": "Server should handle concurrent load efficiently",
+                    "points": 5,
+                    "performance": true,
+                    "concurrentClients": 3,
+                    "numRequests": 5,
+                    "messageSize": 128,
+                    "maxResponseTime": 0.5
+                }
+            ],            "client": [
+                {
+                    "serverScript": [
+                        {"response": "Mon Jun 25 10:30:45 2025\n"}
+                    ],
+                    "expectedOutput": "Server Time:",
+                    "matchType": "contains",
+                    "description": "Client output should contain 'Server Time:' prefix.",
+                    "points": 3
+                },
+                {
+                    "serverScript": [
+                        {"response": "Mon Jun 25 10:35:15 2025\n"}
+                    ],
+                    "expectedOutput": "Server Time:",
+                    "matchType": "contains",
+                    "description": "Client should print the date-time string received from the server.",
+                    "points": 7
+                },
+                {
+                    "serverScript": [
+                        {"response": "Mon Jun 25 10:40:30 2025\n"}
+                    ],
+                    "expectedOutput": "Server Time:",
+                    "matchType": "contains",
+                    "description": "Multiple clients should all print valid date-time strings.",
+                    "points": 5,
+                    "clientCount": 3
+                },
+                {                    "serverScript": [
+                        {"response": "Enter server command:"},
+                        {"expect": "GET_TIME", "response": "Server time: Mon Jun 25 10:45:00 2025\n"},
+                        {"expect": "EXIT", "response": "Goodbye!\n"}
+                    ],
+                    "expectedOutput": "Server time:",
+                    "matchType": "contains",
+                    "description": "Interactive client with multiple commands",
+                    "points": 5,
+                    "input": ["GET_TIME", "EXIT"],
+                    "interactive": true
+                }
+            ]
+        },
         "image": "/public/multiple_clients.jpg"
     },
     {
@@ -44,39 +125,106 @@
         "clientSolution": {
             "client.c": "// Full working client code that connects to server, sends input like '2 + 3', and prints the result returned by the server."
         },
-        "testCases": [
-            {
-            "input": "3 + 5",
-            "expectedOutput": "8",
-            "description": "Test basic addition",
-            "points": 2
-            },
-            {
-            "input": "12 - 7",
-            "expectedOutput": "5",
-            "description": "Test subtraction",
-            "points": 2
-            },
-            {
-            "input": "9 * 6",
-            "expectedOutput": "54",
-            "description": "Test multiplication",
-            "points": 2
-            },
-            {
-            "input": "100 / 5",
-            "expectedOutput": "20",
-            "description": "Test division",
-            "points": 2
-            },
-            {
-            "input": "abc + 4",
-            "expectedOutput": "Error or invalid input",
-            "description": "Handle malformed input gracefully",
-            "points": 2
-            }
-        ],
-        "evaluationScript": "evaluate_server2.sh",
+        "evaluationScript": "server_evaluator.py",
+        "clientCount": 1, 
+        "clientDelay": 0.5,        
+        "evalType": "arithmetic",
+        "testCases": {
+            "server": [
+                {
+                    "input": "2 + 3",
+                    "expectedOutput": "5",
+                    "matchType": "contains",
+                    "description": "Test basic addition",
+                    "points": 2
+                },
+                {
+                    "input": "12 - 7",
+                    "expectedOutput": "5",
+                    "description": "Test subtraction",
+                    "points": 2
+                },
+                {
+                    "input": "9 * 6",
+                    "expectedOutput": "54",
+                    "description": "Test multiplication",
+                    "points": 2
+                },
+                {
+                    "input": "100 / 5",
+                    "expectedOutput": "20",
+                    "description": "Test division",
+                    "points": 2
+                },
+                {
+                    "input": "abc + 4",
+                    "expectedOutput": "Error or invalid input",
+                    "matchType": "contains",
+                    "description": "Handle malformed input gracefully",
+                    "points": 2
+                }
+            ],            
+            "client": [                
+                {
+                    "serverScript": [
+                        {"response": "Enter expression (e.g., 3 + 4): "},          
+                        {"expect": "2 + 3", "response": "5\n"}      
+                    ],
+                    "expectedOutput": "Result from server: 5",
+                    "matchType": "contains",
+                    "description": "Client displays result of 2 + 3",
+                    "points": 2,
+                    "input": "2 + 3",
+                    "interactive": true
+                },                {
+                    "serverScript": [
+                        {"response": "Enter expression (e.g., 3 + 4): "},
+                        {"expect": "9 * 6", "response": "54\n"}
+                    ],
+                    "expectedOutput": "Result from server: 54",
+                    "matchType": "contains",
+                    "description": "Client displays exact result of 9 * 6",
+                    "points": 2,
+                    "input": "9 * 6",
+                    "interactive": true
+                },                {
+                    "serverScript": [
+                        {"response": "Enter expression (e.g., 3 + 4): "},
+                        {"expect": "abc + 4", "response": "Error or invalid input\n"}
+                    ],
+                    "expectedOutput": "Error or invalid input",
+                    "matchType": "contains",
+                    "description": "Client handles error message from server",
+                    "points": 2,
+                    "input": "abc + 4",
+                    "interactive": true
+                },                {
+                    "serverScript": [
+                        {"response": "Enter expression (e.g., 3 + 4): "},
+                        {"expect": "100 / 5", "response": "20\n"}
+                    ],
+                    "expectedOutput": "Result from server: 20",
+                    "matchType": "contains",
+                    "description": "Client displays result of 100 / 5",
+                    "points": 2,
+                    "input": "100 / 5",
+                    "interactive": true
+                },
+                {                    
+                    "serverScript": [
+                        {"response": "Username:"},
+                        {"expect": "testuser", "response": "Password:"},
+                        {"expect": "password123", "response": "Login successful\n"}
+                    ],
+                    "expectedOutput": "Login successful",
+                    "matchType": "contains",
+                    "description": "Client handles multi-step authentication",
+                    "points": 2,
+                    "input": ["testuser", "password123"],
+                    "interactive": true
+                }
+            ]
+        },
         "image": "/public/tcp_ladder_states.png"
     }
 

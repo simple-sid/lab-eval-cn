@@ -32,29 +32,29 @@ export async function createContainerForUser(userId) {
   const existing = existingContainers.find(c => c.Names.includes(`/${containerName}`));
 
   if (existing) {
-  const existingContainer = docker.getContainer(existing.Id);
-  const containerState = existing.State;
+    const existingContainer = docker.getContainer(existing.Id);
+    const containerState = existing.State;
 
-  const sshPort = parseInt(
-    existing.Ports.find(p => p.PrivatePort === 22)?.PublicPort || '0'
-  );
+    const sshPort = parseInt(
+      existing.Ports.find(p => p.PrivatePort === 22)?.PublicPort || '0'
+    );
 
-  if (containerState !== 'running') {
-    try {
-      await existingContainer.start();
-      console.log(`[Dockerode] Restarted container ${containerName}`);
-    } catch (err) {
-      console.error(`[Dockerode] Failed to restart container:`, err.message);
-      // Maybe the old container is broken. Remove and recreate:
-      await existingContainer.remove({ force: true });
-      return await createContainerForUser(userId); // retry creation
+    if (containerState !== 'running') {
+      try {
+        await existingContainer.start();
+        console.log(`[Dockerode] Restarted container ${containerName}`);
+      } catch (err) {
+        console.error(`[Dockerode] Failed to restart container:`, err.message);
+        // Maybe the old container is broken. Remove and recreate:
+        await existingContainer.remove({ force: true });
+        return await createContainerForUser(userId); // retry creation
+      }
+    } else {
+      console.log(`[Dockerode] Reusing running container ${containerName}`);
     }
-  } else {
-    console.log(`[Dockerode] Reusing running container ${containerName}`);
-  }
 
-  return { containerName, volumeName, sshPort, sessionId };
-}
+    return { containerName, volumeName, sshPort, sessionId };
+  }
 
   // Check and create volume if needed
   const volumes = await docker.listVolumes();

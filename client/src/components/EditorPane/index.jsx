@@ -21,10 +21,12 @@ export default function EditorPane({
   setFiles,
   activeFileId,
   setActiveFileId,
+  activeFile,
   updateCode,
   addNewFile,
   openFile,
   onRun,
+  onEvaluate,
   onSubmit,
   isRunning,
   isSubmitting,
@@ -45,11 +47,11 @@ export default function EditorPane({
   const [showTagModal, setShowTagModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  const activeFile = files.find(f => f.id === activeFileId) || files[0];
+  // const activeFile = files.find(f => f.id === activeFileId) || files[0];
 
   const editorOptions = {
     fontSize,
-    minimap: { enabled: false },
+    minimap: { enabled: true },
     automaticLayout: true,
     scrollBeyondLastLine: false,
     wordWrap: 'on',
@@ -234,6 +236,7 @@ export default function EditorPane({
         activeFile={activeFile}
         showTerminal={showTerminal}
         setShowTerminal={setShowTerminal}
+        onEvaluate={onEvaluate}
       />
 
       {/* Click outside to close settings */}

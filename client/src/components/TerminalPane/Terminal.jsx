@@ -297,7 +297,7 @@ const TerminalComponent = ({
         console.error('[Terminal] Save error:', err);
         xterm.current?.writeln(`\r\n*** Error saving file: ${err?.response?.data?.error || err.message} ***`);
         return;
-      }
+      };
       // Ensure WS is ready
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         xterm.current?.writeln("\r\n*** Waiting for terminal connection... ***");

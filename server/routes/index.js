@@ -30,11 +30,31 @@ router.post('/save-file', async (req, res) => {
 // Run code and evaluate protocol/test cases
 router.post('/run-evaluate', async (req, res) => {
   try {
-    const { userId = 'testuser123', filename, code, language, evaluationScript, testCases } = req.body;
+    const { 
+      userId = 'testuser123', 
+      filename, 
+      code, 
+      language, 
+      evaluationScript = 'server_evaluator.py', 
+      testCases = [],
+      clientCount = 1,
+      clientDelay = 0.5,
+      evalType = 'default'
+    } = req.body;
     if (!filename || !code || !language) {
       return res.status(400).json({ error: 'Missing required fields (filename, code, language)' });
     }
-    const result = await runAndEvaluate({ userId, filename, code, language, evaluationScript, testCases });
+    const result = await runAndEvaluate({ 
+      userId, 
+      filename, 
+      code, 
+      language, 
+      evaluationScript, 
+      testCases,
+      clientCount,
+      clientDelay,
+      evalType
+    });
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('[API] run-evaluate error:', err);

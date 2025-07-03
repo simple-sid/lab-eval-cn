@@ -7,8 +7,6 @@ import {
   CpuChipIcon,
   CommandLineIcon
 } from '@heroicons/react/24/outline';
-import axios from 'axios';
-import codeFiles from '../../../public/codeFiles.json';
 
 export default function RunButtons({ 
   onRun, 
@@ -17,8 +15,10 @@ export default function RunButtons({
   isSubmitting, 
   activeFile, 
   showTerminal,
-  setShowTerminal
+  setShowTerminal,
+  onEvaluate
 }) {
+
   return (
     <div className="flex items-center justify-between h-12 p-4 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-t border-gray-200/50">
       <div className="flex items-center space-x-3 text-sm">
@@ -67,25 +67,7 @@ export default function RunButtons({
 
         {/* Evaluate button */}
         <button
-          onClick={async () => {
-            try {
-              const questions = window.questions || [];
-              const activeQuestionIdx = window.activeQuestionIdx || 0;
-              const evaluationScript = questions[activeQuestionIdx]?.evaluationScript;
-              const testCases = questions[activeQuestionIdx]?.testCases || [];
-              await axios.post('http://localhost:5001/api/run-evaluate', {
-                filename: activeFile.path || activeFile.name,
-                code: activeFile.code,
-                language: activeFile.language,
-                evaluationScript,
-                testCases
-              }).then(resp => {
-                window.dispatchEvent(new CustomEvent('evaluation-complete', { detail: resp.data }));
-              });
-            } catch (err) {
-              console.error('Evaluate error', err);
-            }
-          }}
+          onClick={onEvaluate}
           className={`
             flex items-center space-x-2 px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-300 shadow-lg
             ${isSubmitting

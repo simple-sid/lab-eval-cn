@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import TestCases from './TestCases';
 import Submissions from './Submissions';
+import TestSelector from './TestSelector';
 import { 
   XMarkIcon,
   ClockIcon,
@@ -10,7 +11,13 @@ import {
   DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
-export default function QuestionPane({ questions, activeQuestionIdx, setActiveQuestionIdx, onClose, testCaseResults }) {
+export default function QuestionPane({ 
+  questions, 
+  activeQuestionIdx, 
+  setActiveQuestionIdx, 
+  onClose, 
+  testCaseResults 
+}) {
   if (!questions || !Array.isArray(questions) || questions.length === 0) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-gray-500 bg-gradient-to-br from-slate-50 to-white">
@@ -60,10 +67,17 @@ export default function QuestionPane({ questions, activeQuestionIdx, setActiveQu
             </h2>
             <p className="text-xs text-gray-500">Read carefully before coding</p>
           </div>
-        </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-full border border-gray-200">
+        </div>        <div className="flex items-center space-x-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-full border border-gray-200">
             <AcademicCapIcon className="w-4 h-4 text-blue-500" />
-            <span className="font-medium">{question.testCases?.reduce((sum, tc) => sum + tc.points, 0) || 0} points</span>
+            <span className="font-medium">
+              {Array.isArray(question.testCases) 
+                ? question.testCases?.reduce((sum, tc) => sum + (tc.points || 0), 0) 
+                : (
+                    (question.testCases?.server?.reduce((sum, tc) => sum + (tc.points || 0), 0) || 0) +
+                    (question.testCases?.client?.reduce((sum, tc) => sum + (tc.points || 0), 0) || 0)
+                  )
+              } points
+            </span>
         </div>
       </div>
 
@@ -90,8 +104,7 @@ export default function QuestionPane({ questions, activeQuestionIdx, setActiveQu
         >
           <BeakerIcon className="w-4 h-4" />
           <span>Pre-Code</span>
-        </button>
-        <button
+        </button>        <button
           onClick={() => setActiveTab('testcases')}
           className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-all duration-300 ${
             activeTab === 'testcases'
@@ -100,9 +113,13 @@ export default function QuestionPane({ questions, activeQuestionIdx, setActiveQu
           }`}
         >
           <BeakerIcon className="w-4 h-4" />
-          <span>Test Cases</span>
-          <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-full font-semibold">
-            {question.testCases?.length || 0}
+          <span>Test Cases</span>          <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-full font-semibold">
+            {
+              Array.isArray(question.testCases)
+                ? question.testCases.length
+                : ((question.testCases?.server?.length || 0) + 
+                   (question.testCases?.client?.length || 0))
+            }
           </span>
         </button>
         <button
@@ -157,10 +174,17 @@ export default function QuestionPane({ questions, activeQuestionIdx, setActiveQu
               </div>
             ))}
           </div>
-        )}
-        {activeTab === 'testcases' && (
+        )}          {activeTab === 'testcases' && (
           <div className="fade-in-up">
-            <TestCases testCases={question.testCases || []} testCaseResults={testCaseResults} />
+            {console.log('QuestionPane passing to TestSelector:', { 
+              question, 
+              questionTestCases: question?.testCases,
+              testCaseResults 
+            })}
+            <TestSelector 
+              question={question}
+              testCaseResults={testCaseResults}
+            />
           </div>
         )}
         {activeTab === 'submissions' && (

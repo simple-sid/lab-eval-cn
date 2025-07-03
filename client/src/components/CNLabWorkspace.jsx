@@ -8,6 +8,7 @@ import TerminalPane from './TerminalPane';
 import FileSelectorModal from './EditorPane/fileSelectorModal';
 import ResizeHandle from './shared/ResizeHandle';
 import { useIsMobile } from './utils/useIsMobile';
+import axios from 'axios';
 
 const MobileTabs = ({ activeTab, setActiveTab, tabs }) => (
   <div className="flex bg-white border-b border-gray-200 shadow-sm">
@@ -121,32 +122,44 @@ export default function CNLabWorkspace() {
       })
       .catch(err => console.error("Error loading files:", err));
   }, []);
+  
+  const [activeFileId, setActiveFileId] = useState('server');
+  const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testCaseResults, setTestCaseResults] = useState({});
 
+  // setting test case results
   useEffect(() => {
     const onEval = (e) => {
       const { results } = e.detail || {};
-      const currentTestCases = questions[activeQuestionIdx]?.testCases || [];
-      // Merge each result into the corresponding test case
-      setTestCaseResults(
-        currentTestCases.map((tc, idx) => {
-          const result = results && results[idx] ? results[idx] : {};
-          return {
-            ...tc,
-            actualOutput: (result.stdout || '') + (result.stderr ? `\n${result.stderr}` : ''),
-            status: result.exitCode === 0 ? 'PASS' : 'FAIL',
-            exitCode: result.exitCode
-          };
-        })
-      );
+      const currentQuestion = questions[activeQuestionIdx];
+      const questionId = currentQuestion?.id;
+
+      if (!questionId || !results) return;
+
+      const currentTestCases = currentQuestion?.testCases || [];
+      
+      // merge each result into corresponding test case
+      const processedResults = currentTestCases.map((tc, idx) => {
+        const result = results && results[idx] ? results[idx] : {};
+        return {
+          ...tc,
+          actualOutput: (result.stdout || '') + (result.stderr ? `\n${result.stderr}` : ''),
+          status: result.exitCode === 0 ? 'PASS' : 'FAIL',
+          exitCode: result.exitCode
+        };
+      });
+
+      // store results by question id
+      setTestCaseResults(prev => ({
+        ...prev,
+        [questionId]: processedResults
+      }));
     };
+    
     window.addEventListener('evaluation-complete', onEval);
     return () => window.removeEventListener('evaluation-complete', onEval);
   }, [questions, activeQuestionIdx]);
-  
-  // Reset testCaseResults when switching questions
-  useEffect(() => {
-    setTestCaseResults([]);
-  }, [activeQuestionIdx]);
   
   // When questions or activeQuestionIdx changes, set files from solution
   useEffect(() => {
@@ -377,6 +390,81 @@ export default function CNLabWorkspace() {
     );
   };
 
+  const activeFile = files.find(f => f.id === activeFileId) || files[0];  
+  const handleEvaluate = async () => {
+    try {
+      if (!questions.length || !activeFile) return;      const currentQuestion = questions[activeQuestionIdx] || {};
+      
+      // Determine code type (server or client) based on filename
+      const isClient = activeFile.name.toLowerCase().includes('client');
+      const codeType = isClient ? 'client' : 'server';
+      
+      // Choose the appropriate evaluation script and test cases
+      const evaluationScript = isClient ? 'client_evaluator.py' : (currentQuestion.evaluationScript || 'server_evaluator.py');
+      
+      const testCases = currentQuestion.testCases?.[codeType] || [];
+      
+      const clientCount = currentQuestion.clientCount || 1;
+      const clientDelay = currentQuestion.clientDelay || 0.5;
+      const evalType = currentQuestion.evalType || 'default';
+
+      console.log(`EVALUATE: Sending ${codeType} evaluation request:`, { 
+        evaluationScript, testCases, clientCount, clientDelay, evalType, codeType 
+      });
+
+      const response = await axios.post('http://localhost:5001/api/run-evaluate', {
+        filename: activeFile.path || activeFile.name,
+        code: activeFile.code,
+        language: activeFile.language,
+        evaluationScript,
+        testCases,
+        clientCount,
+        clientDelay,
+        evalType,
+        codeType
+      });
+      
+      // Process test results
+      const updatedTestCases = [];
+      if (response.data && response.data.results) {
+        // Map each test result to include all relevant information
+        response.data.results.forEach((result, idx) => {
+          const originalTest = testCases[idx] || {};
+          const resultParts = (result.stdout || '').split(':');
+          const status = resultParts.length > 1 ? resultParts[1] : 'FAIL';
+          const message = resultParts.length > 2 ? resultParts.slice(2).join(':') : result.stderr || 'Evaluation failed';
+          
+          updatedTestCases.push({
+            ...originalTest,  // Keep original test case properties
+            id: idx,          // Add an id for tracking
+            description: originalTest.description || `Test ${idx + 1}`,
+            points: originalTest.points || 0,
+            status: status,
+            actualOutput: message,
+            stderr: result.stderr || ''
+          });
+        });
+        
+        // Update test case results in the relevant question
+        const updatedQuestions = [...questions];
+        updatedQuestions[activeQuestionIdx] = {
+          ...currentQuestion,
+          [`testCaseResults_${codeType}`]: updatedTestCases
+        };
+        setQuestions(updatedQuestions);
+      }
+      
+      window.dispatchEvent(new CustomEvent('evaluation-complete', { 
+        detail: {
+          ...response.data,
+          testCaseResults: updatedTestCases
+        }
+      }));
+    } catch (err) {
+      console.error('Evaluate error', err);
+    }
+  }
+
   // Handle stopping all processes
   const handleStopAll = () => {
     setShowTerminal(true);
@@ -532,7 +620,7 @@ export default function CNLabWorkspace() {
                       activeQuestionIdx={activeQuestionIdx}
                       setActiveQuestionIdx={setActiveQuestionIdx}
                       onClose={() => setShowQuestion(false)}
-                      testCaseResults={testCaseResults}
+                      testCaseResults={testCaseResults[questions[activeQuestionIdx]?.id] || []}
                     />
                   </Panel>
                   <ResizeHandle />
@@ -546,10 +634,12 @@ export default function CNLabWorkspace() {
                   setFiles={setFiles}
                   activeFileId={activeFileId}
                   setActiveFileId={setActiveFileId}
+                  activeFile={activeFile}
                   updateCode={updateCode}
                   addNewFile={addNewFile}
                   openFile={openFile}
                   onRun={handleRun}
+                  onEvaluate={handleEvaluate}
                   onSubmit={handleSubmit}
                   onStopAll={handleStopAll}
                   isRunning={isRunning}
