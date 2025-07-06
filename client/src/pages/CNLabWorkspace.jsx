@@ -1,13 +1,14 @@
+
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Panel, PanelGroup } from 'react-resizable-panels';
 import axios from 'axios';
-import Header from './Header';
-import EditorPane from './EditorPane';
-import QuestionPane from './QuestionPane';
-import TerminalPane from './TerminalPane';
-import FileSelectorModal from './EditorPane/fileSelectorModal';
-import ResizeHandle from './shared/ResizeHandle';
-import { useIsMobile } from './utils/useIsMobile';
+import Header from '../components/Header';
+import EditorPane from '../components/EditorPane';
+import QuestionPane from '../components/QuestionPane';
+import TerminalPane from '../components/TerminalPane';
+import FileSelectorModal from '../components/EditorPane/fileSelectorModal';
+import ResizeHandle from '../components/shared/ResizeHandle';
+import { useIsMobile } from '../components/utils/useIsMobile';
 
 const MobileTabs = ({ activeTab, setActiveTab, tabs }) => (
   <div className="flex bg-white border-b border-gray-200 shadow-sm">
@@ -30,12 +31,14 @@ const MobileTabs = ({ activeTab, setActiveTab, tabs }) => (
   </div>
 );
 
+
 // Helper functions
 const getCurrentUser = () => 'testuser123'; // replace with jwt
 const getCurrentDateTime = () => {
   const now = new Date();
   return now.toISOString().slice(0, 19).replace('T', ' ');
 };
+
 
 export default function CNLabWorkspace() {
   const isMobile = useIsMobile();
@@ -70,6 +73,7 @@ export default function CNLabWorkspace() {
       .then(data => setQuestions(data))
       .catch(err => console.error('Error loading questions:', err));
   }, []);
+
 
   //tags for diff server and client codes
   function getTagsFromQuestion(question) {
@@ -122,6 +126,7 @@ export default function CNLabWorkspace() {
       .catch(err => console.error("Error loading files:", err));
   }, []);
 
+
   // setting test case results
   useEffect(() => {
     const onEval = (e) => {
@@ -154,7 +159,8 @@ export default function CNLabWorkspace() {
     window.addEventListener('evaluation-complete', onEval);
     return () => window.removeEventListener('evaluation-complete', onEval);
   }, [questions, activeQuestionIdx]);
-  
+
+
   // When questions or activeQuestionIdx changes, set files from solution
   useEffect(() => {
     if (questions && questions.length > 0 && questions[activeQuestionIdx] && questions[activeQuestionIdx].solution) {
@@ -179,6 +185,7 @@ export default function CNLabWorkspace() {
     }
   }, [questions, activeQuestionIdx]);
 
+
   // Handle file operations
   const updateCode = (newCode) => {
     setFiles(prevFiles => 
@@ -187,6 +194,7 @@ export default function CNLabWorkspace() {
       )
     );
   };
+
 
   //track changes and auto-save
   useEffect(() => {
@@ -199,6 +207,7 @@ export default function CNLabWorkspace() {
 
     return () => clearTimeout(timeoutId);
   }, [files, activeFileId]);
+
 
   const addNewFile = () => {
     const fileName = `new_file_${fileNo}.${language === 'c' ? 'c' : language === 'python' ? 'py' : 'txt'}`;
@@ -229,6 +238,7 @@ export default function CNLabWorkspace() {
     setActiveFileId(newId);
   };
 
+
   const openFile = async () => {
     try {
       const response = await axios.get('http://localhost:5001/api/file/list-files', {
@@ -241,6 +251,7 @@ export default function CNLabWorkspace() {
       alert("Could not load file list.");
     }
   };
+
 
   const handleFileSelect = async (selected) => {
     setShowFileModal(false);
@@ -276,6 +287,7 @@ export default function CNLabWorkspace() {
     }
   };
 
+
   const handleCloseFile = (fileId) => {
     setFiles(prevFiles => prevFiles.filter(f => f.id !== fileId));
     // set a new active file if the closed one was active
@@ -285,6 +297,9 @@ export default function CNLabWorkspace() {
       setActiveFileId(nextFile?.id || null);
     }
   };  // Handle execution
+
+
+  // Handle execution
   const handleRun = () => {
     setIsRunning(true);
     setShowTerminal(true);
@@ -312,6 +327,7 @@ export default function CNLabWorkspace() {
     }, 100);
   };
 
+
   const saveFile = async (file) => {
     if (!file) return;
     try {
@@ -336,6 +352,7 @@ export default function CNLabWorkspace() {
       setSaveStatus('idle');
     }
   };
+
 
   //handle rename and code language change
   const renameFile = (fileId, newName) => {
@@ -363,6 +380,7 @@ export default function CNLabWorkspace() {
     setLanguage(detectedLanguage);
   };
 
+
   const updateFileLanguage = (fileId, newLang) => {
     const newExt = newLang === 'c' ? 'c' : newLang === 'python' ? 'py' : '';
     setFiles(prevFiles =>
@@ -383,6 +401,7 @@ export default function CNLabWorkspace() {
       })
     );
   };
+
 
   const activeFile = files.find(f => f.id === activeFileId) || files[0];  
   const handleEvaluate = async () => {
@@ -457,11 +476,13 @@ export default function CNLabWorkspace() {
     }
   }
 
+
   // Handle stopping all processes
   const handleStopAll = () => {
     setShowTerminal(true);
     window.dispatchEvent(new CustomEvent('stop-all-processes'));
   };
+
 
   //Handle Sumission - eval of test cases and log to DB
   const handleSubmit = async () => {
@@ -509,18 +530,22 @@ export default function CNLabWorkspace() {
     }
   };
 
+
   const handleTimeUp = () => {
     alert("[Time] Time's up! Your code will be automatically submitted.");
     handleSubmit();
   };
 
+
   const question = questions && questions.length > 0 ? questions[activeQuestionIdx] : undefined;
+
 
   // Keep window.questions and window.activeQuestionIdx in sync for evaluation
   useEffect(() => {
     window.questions = questions;
     window.activeQuestionIdx = activeQuestionIdx;
   }, [questions, activeQuestionIdx]);
+
 
   //handle resize for terminal open and close
   useEffect(() => {
@@ -532,6 +557,8 @@ export default function CNLabWorkspace() {
       }
     }
   }, [showTerminal]);
+
+  // Mobile layout
 
   // Mobile layout
   if (isMobile) {
@@ -588,6 +615,8 @@ export default function CNLabWorkspace() {
       </div>
     );
   }
+
+  // Desktop layout
 
   // Desktop layout
   return (

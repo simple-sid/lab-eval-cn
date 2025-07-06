@@ -1,11 +1,14 @@
 import Timer from './Timer';
+import { Link } from 'react-router-dom';
 import { 
   QuestionMarkCircleIcon, 
   BeakerIcon,
   ClockIcon,
   EyeIcon,
   EyeSlashIcon,
-  SparklesIcon
+  SparklesIcon,
+  ArrowLeftIcon,
+  AcademicCapIcon
 } from '@heroicons/react/24/outline';
 
 export default function Header({ 
@@ -13,12 +16,15 @@ export default function Header({
   timeLimit, 
   onTimeUp, 
   showQuestion = true, 
-  onToggleQuestion 
+  onToggleQuestion,
+  isTeacherPage = false,
+  backLink,
+  backText
 }) {
   return (
     <header className="bg-white/80 backdrop-blur-lg border-b border-gray-200/50 shadow-lg">
       <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-cyan-500/5"></div>
-      <div className="relative flex items-center justify-between px-6 py-4">
+      <div className="relative flex items-center justify-between px-6 py-4 max-h-16">
         {/* Left section */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-3 group">
@@ -31,14 +37,18 @@ export default function Header({
               </h1>
               <div className="flex items-center space-x-1 text-xs text-gray-500">
                 <SparklesIcon className="w-3 h-3" />
-                <span>Interactive Learning</span>
+                <span>{isTeacherPage ? 'Teacher Dashboard' : 'Interactive Learning'}</span>
               </div>
             </div>
           </div>
           
           <div className="hidden md:flex items-center space-x-2 text-gray-500">
             <div className="w-px h-8 bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
-            <QuestionMarkCircleIcon className="w-4 h-4 text-indigo-500" />
+            {isTeacherPage ? (
+              <AcademicCapIcon className="w-4 h-4 text-indigo-500" />
+            ) : (
+              <QuestionMarkCircleIcon className="w-4 h-4 text-indigo-500" />
+            )}
             <h2 className="text-md font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-full">
               {title}
             </h2>
@@ -54,6 +64,17 @@ export default function Header({
 
         {/* Right section */}
         <div className="flex items-center space-x-4">
+          {/* Back button for teacher pages */}
+          {isTeacherPage && backLink && (
+            <Link 
+              to={backLink}
+              className="hidden md:flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-indigo-600 bg-white/50 hover:bg-indigo-50 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-300"
+            >
+              <ArrowLeftIcon className="w-4 h-4" />
+              <span className="hidden lg:inline">{backText || 'Back'}</span>
+            </Link>
+          )}
+          
           {/* Question toggle (desktop only) */}
           {onToggleQuestion && (
             <button
@@ -72,13 +93,15 @@ export default function Header({
             </button>
           )}
 
-          {/* Timer */}
-          <div className="flex items-center space-x-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-2 rounded-xl border border-gray-200/50 shadow-sm backdrop-blur-sm">
-            <div className="p-1 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg">
-              <ClockIcon className="w-5 h-5 text-white" />
+          {/* Timer - Only show for student pages */}
+          {!isTeacherPage && timeLimit && (
+            <div className="flex items-center space-x-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-2 rounded-xl border border-gray-200/50 shadow-sm backdrop-blur-sm">
+              <div className="p-1 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg">
+                <ClockIcon className="w-5 h-5 text-white" />
+              </div>
+              <Timer duration={timeLimit} onExpire={onTimeUp} />
             </div>
-            <Timer duration={timeLimit} onExpire={onTimeUp} />
-          </div>
+          )}
         </div>
       </div>
     </header>

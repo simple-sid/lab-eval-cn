@@ -10,6 +10,7 @@ import {
   BoltIcon,
   WrenchIcon
 } from '@heroicons/react/24/outline';
+import { TabButton } from '../FormComponents';
 
 export default function EditorTabs({ 
   files, 
@@ -78,62 +79,56 @@ export default function EditorTabs({
   }
 
   return (
-    <div className="flex bg-gray-100 border-b border-gray-200 overflow-x-auto">
+    <div className="flex bg-gray-100 overflow-x-auto">
       {files.map((file) => (
-        <div
+        <TabButton
           key={file.id}
-          className={`
-            group relative flex items-center min-w-0 px-3 py-2 border-r border-gray-200 cursor-pointer transition-colors
-            ${activeFileId === file.id 
-              ? 'bg-white text-gray-900 border-b-2 border-blue-600' 
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }
-          `}
+          active={activeFileId === file.id}
           onClick={() => setActiveFileId(file.id)}
+          curved={false}
         >
-          <span className="mr-2 text-sm flex items-center">{getFileIcon(file.name)}</span>
-          
-          {editingId === file.id ? (
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={finishRename}
-              onKeyDown={handleKeyDown}
-              className="bg-transparent border-none outline-none text-sm min-w-0 flex-1"
-              autoFocus
-            />
-          ) : (
-            <>
-              <span 
-                className="text-sm truncate max-w-32"
-                onDoubleClick={() => startRename(file.id, file.name)}
-                title={file.path}
-              >
-                {file.name}
-              </span>
-
-              {files.length > 1 && (
-                <button
-                  onClick={(e) => closeFile(file.id, e)}
-                  className="ml-2 p-0.5 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Close file"
+          <div className="flex items-center">
+            <span className="mr-2 text-sm flex items-center">{getFileIcon(file.name)}</span>
+            
+            {editingId === file.id ? (
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={finishRename}
+                onKeyDown={handleKeyDown}
+                className="bg-transparent border-none outline-none text-sm min-w-0 flex-1"
+                autoFocus
+              />
+            ) : (
+              <>
+                <span 
+                  className="text-sm truncate max-w-32"
+                  onDoubleClick={() => startRename(file.id, file.name)}
+                  title={file.path}
                 >
-                  <XMarkIcon className="w-3 h-3" />
-                </button>
-              )}
-            </>
-          )}
+                  {file.name}
+                </span>
 
-          {/* Modified indicator */}
-          {file.modified && (
-            <div className="w-2 h-2 bg-blue-600 rounded-full ml-1" title="Modified" />
-          )}
-        </div>
+                {files.length > 1 && (
+                  <span
+                    onClick={(e) => closeFile(file.id, e)}
+                    className="ml-2 p-0.5 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    title="Close file"
+                  >
+                    <XMarkIcon className="w-3 h-3" />
+                  </span>
+                )}
+              </>
+            )}
+
+            {/* Modified indicator */}
+            {file.modified && (
+              <div className="w-2 h-2 bg-blue-600 rounded-full ml-1" title="Modified" />
+            )}
+          </div>
+        </TabButton>
       ))}
-      
-      {/* Add visual indicator for active tab */}
-      {/* <div className="flex-1 bg-gray-100" /> */}
     </div>
   );
 }

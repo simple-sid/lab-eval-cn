@@ -83,6 +83,23 @@ router.post('/upload-image', upload.single('image'), async (req, res) => {
   }
 });
 
+// PUT api/questions/:id - update(edit) question
+router.put('/:id', async (req, res) => {
+  try {
+    const updatedQuestion = await Question.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true } // Return the updated document
+    );
+    if (!updatedQuestion) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+    res.status(200).json(updatedQuestion);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // GET api/questions - list all questions
 router.get('/', async (req, res) => {
   try {

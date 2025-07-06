@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import CNLabWorkspace from './components/CNLabWorkspace';
+import CNLabWorkspace from './pages/CNLabWorkspace';
 import TeacherUpload from './pages/TeacherUpload';
 import Home from './pages/Home';
 import './App.css';

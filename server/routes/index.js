@@ -3,6 +3,8 @@ import pingRoute from './ping.js';
 import questionsRoute from './questions.js';
 import submissionRoute from './submission.js';
 import filesRoute from './file.js';
+import moduleRoutes from './modules.js';
+import sessionsRoute from './sessions.js';
 import { saveFileToContainer, runAndEvaluate } from '../controllers/sshController.js';
 
 const router = Router();
@@ -10,7 +12,9 @@ const router = Router();
 router.use('/ping', pingRoute);
 router.use('/questions', questionsRoute);
 router.use('/submission', submissionRoute);
-router.use('/file',filesRoute)
+router.use('/file',filesRoute);
+router.use('/modules', moduleRoutes);
+router.use('/sessions', sessionsRoute);
 
 // Save file to container
 router.post('/save-file', async (req, res) => {

@@ -1,0 +1,239 @@
+# Guide for lab evaluation module(COMPUTER NETWORKS[CN])
+
+About system:
+
+> The system uses the TCPDUMP tool to evaluate the code written by the students against given expected
+  by the staffs or instructor.
+> The systems tap the data transfer between the server and clients and validate them
+> The current version does not evaluate the outputs of each program, tapped data transfer between
+  server and clients.
+> The current script can only handle the single server multi-client architecture, NOT multi server
+  architecture.
+> The system can work both in TCP and UDP protocols separately.
+> This system does NOT give the amount of data transferred as a separate output, but it can be processed
+  from the data.log file.
+
+
+
+------------------------------------- SYSTEM REQUIREMENTS --------------------------------------------
+
+
+
+1. The system must have a TCPDUMP installed in it.
+2. The system must have BASH as the default script language.
+   With version greater than 5.1(~version is not accurate)
+
+3. The system should have SS tool installed in it.
+4. PRIMARY REQUIREMENT - tcpdump must be made a normal tool such that it can be run by the student
+   users and the students can kill it too , without any sudo requirement or password expecting.
+   If not done correctly, then someone has input the terminal for the password. You can use multiple
+   methods to reduce the privileges for tcpdump, so anyone use it.
+
+   (Recommended methods)
+       1> set [ student_user NOPASSWD: /usr/bin/tcpdump, /usr/sbin/tcpdump ] in "sudo visduo"
+                    ^                             ^
+          students username                  path to tcpdump(specific the correct path to tcpdump)
+
+       2> use the setcap and getcap tools in the libcap library to to make the tcpdump a special
+          privileged application running without sudo or password.
+
+NOTE: student or the user running the script must have elevated privileges to run and kill tcpdump
+      ALONE without password. Otherwise they will be prompted for password input.
+
+
+
+---------------------------------- STUDENTS REQUIREMENT ----------------------------------------
+
+
+
+> The question MUST provide the PORT and PROTOCOL of the server to the students
+
+> Students are restricted to use the FORMAT OF DATA TRANSFER specified by the staff or instructor
+  in the question. Even a small change in the format will not be evaluated correctly.
+  Like
+      the data "1+2" is transferred from the client to server. It will be tapped by the tcpdump tool
+      and stored in a file for evaluation. Even if there is a small change in the data transfer
+      format like "1 + 2" [space in between] may result in wrong evaluation.
+
+> students should have input line buffer size greater than the one specified in the question. Like
+  inputLineSize=100, then input_array[100], input_array[255] are valid, but input_array[15] is NOT
+  valid, it may produced some unexpeced result in the program, making the program to crash. The
+  script will not handle it, it just give inputs all the programs irrespective of their current
+  running conditions. (updates may be applied in future)
+
+> The programs written by students must not have any compilation issues including warnings.
+  If found the evaluation does NOT takes place.
+
+>  On each evaluation the student will be prompted for inputs
+
+        1 - absolute path to the directory containing the source files.
+        2 - Files names like "server.c client1.c client2.c", with server name being the first one.
+
+> Students
+
+
+----------------------------------------- CN DEVELOPER --------------------------------------------
+
+
+
+The scripts must have the configuration file to run(Both the files should be on the same directory).
+The script is just a general program for tapping the data. But it can modified to use in different
+lab evaluation session by just changing configuration file alone. The configuration file contains
+the data necessary to compile, run, evaluate the code written by the students.
+
+
+> The script takes 3 arguments as inputs
+
+      1      question number
+      2      filesnames with space in between written in quotation
+      3      Path to the directory containing all the source files which is given in the second args
+
+example on executing it  -> ./script.sh 1 "server.c client1.c client2.c" /home/lab_eval/week1
+                                ^       ^              ^                          ^
+                                |      Q no.           |                      path to dir
+                           this script         filenames in quotations     containing files given
+                        as an executable        with space in between        in argument two.
+
+
+NOTE: If the students code has any logical issues, then the system will NOT detect it, even if
+      anyone of the programs terminated in the middle of evaluation, the system will NOT detect
+      it. It just give inputs to those programs even though they have terminated.
+
+----------------------------------------------
+THE FLOW OF THE SCRIPT:
+
+                          takes all the inputs arguments and source the config file
+                                                |
+                                                V
+               check for no of files should (from config) and no of files imputed as arguments
+                   if they are NOT same, the script terminate with EXIT CODE 101
+                                                |
+                                                V
+         Third step is to compile all the source files and their .out files are named accordingly.          
+                       If there is any compilation issue the script EXITS WITH 100.
+                                                |
+                                                V
+    TCPDUMP tool is started (WITHOUT SUDO). It takes a few seconds to start listening to the port
+                             (The scripts waits till it starts).
+                                                |
+                                                V
+        Fourth step is to run the compiled codes. Before running the first program(server.out),
+           the script checks for the PORT availability. If the PORT is NOT available,
+      the scripts waits till the PORT is made available by the OS. And then all the codes are
+     executed using coproc(further updates will provide the may reduce the time to wait)
+                                                |
+                                                V
+       The sequence of inputs for each test case is obtained from the config file and these programs
+                    get their inputs from their respective individual input files.
+NOTE : The script waits for a second or more till the program read that input and sends a message to
+       the receiver. (This time gap can be reduce further based on the host transmitting and
+       receiving machine). The more the inputs the more the time consuming for evaluation.
+                                                |
+                                                v
+       The inputs are read in a line buffered manner by each program and sends messages. These
+     messages are tapped by TCPDUMP and stored in a transfer.log file, which will be parsed to
+       get the actual data transfer in the network. The header (meta data) is a stored in meta.log
+                              and acknowlegement in ack.log
+                                                |
+                                                V
+     once all the inputs are given, the scripts waits a for few seconds for the program to process
+    the output. After that the scripts kills all the process, if necessary it force them.
+                                                |
+                                                V
+                  This process continues till all the test cases are evaluated.
+                               ( Goto step 4 till last test case)
+
+
+==================================== HOW  TO NAME THE FILES ================================
+
+The general syntax
+
+                                        T1_i1_T2_i2_D.log
+
+T1 , T2 - types (like Q-question, meta-meta data, data-processed data, ack-acknowlegement)
+.log    - extension (only few will have extensions)
+
+
+where,
+        Q_1    -    Question number 1
+        data_i -    processed data for Question no i (same goes meta, ack,..)
+
+and when arranged like these
+        Q_10_T_2    -    Question no 10, test case 2
+        data_4_T_7  -    processed data for question no 4 of test case 7
+
+only few files have extension like:
+
+        data_i_T_j.log - processed data of question 'i' with test case 'j'
+        ack_i_T_j.log  - acknowlegement of question 'i' with test case 'j'
+        meta_i_T_j.log - meta data (alias - header) for Question 'i' and Test case 'j'
+
+        transfer_i_T_j.log - It holds the actual raw transferred data. This will be processed to
+                             get the data.log, meta.log, ack.log files.
+
+for input and outfiles:
+
+       Q_i_T_j_OUT_k - Question i test case j OUTPUT file for PROGRAM 'k'
+       Q_i_T_j_IN_k  - Question i test case j INPUT file for PROGRAM 'k'
+
+the compiled .out files are:
+
+      Q_i_OBJ_j    -    OUT FILE of program 'j' for question 'i'
+
+
+==================================== HOW TO READ THE CONFIG FILE ==========================
+
+ Q_i_PORT = Allocated PORT for question 'i' [Numeric]
+
+ Q_i_Nf   = No of file for question i (like "server.c client1.c client2.c" ~Nf = 3(files))[string]
+
+ Q_i_P    = Preferred PROTOCOL for question 'i' [Numeric]
+
+ Q_i_Tc   = Number of test cases for question i [Numeric]
+
+ Q_i_T_j_S = Sequence of feeding inputs to programs for question i test case j
+
+
+=========================== HOW TO USE THIS SCRIPT EFFECTIVILY FOR TEACHERS ======================
+
+- > On evaluating each test cases, the scripts must wait about ~60 seconds before starting the next
+    test cases. To tackle this problem, only use multiple test cases if it is absolutely necessary.
+
+    Lets consider a case where the students are questioned to program a basic calculator server and
+    clients that connect to that server to perform operation. When ctrl+c c is pressed, the client
+    should disconnect from the server and terminates.
+
+    if teacher provide a test case inputs like this
+                     1+2 , 4-2 , 1/0 , ctrl+c
+    the server may crash in the third input(1/0) (which is unhandled by the student) and the
+    further inputs will also result in errors leading to reduction in score.
+
+     if the test cases are split like this
+     T1 -> 1+2 , 1/0
+     T2 -> 4-2 , ctrl+c
+     and if the student had handled ctrl+c (but not divide by zero), then he will obtain marks for
+     the second model testcases , but NOT for first model testcases.
+
+NOTE: So teacher must understand the nature of the problem statement and design testcases
+      accordingly.
+
+
+
+- > Even in single testcases the order of inputs matters like
+                   1+2 , 4-2 , 1/0
+                   1/0 , 1+2 , 4-2
+    Here in the first inputs sequence, the students will obtain 2/3 of marks and loses the 3rd input.
+    But for the second input sequence, he/she loses all the marks for that testcases. So the staffs
+    must be cautious in designing the testcases.
+
+
+-----------------------------------------------------------------------------------------------------
+
+CASES WHERE THE SCRIPT FAILS OR UNABLE TO USE:
+1) During a looped signal broadcast, the same data is send to multiple users leading to repetition of
+   data. To handle this cases, the staffs should provide what data to IGNORE and what data to STORE.
+   With that given we need to process the data to find the necessary data with precedence.
+
+2) During sudden program termination of students program, the script will not detect that, it only
+   gives input and finishes the loop
+

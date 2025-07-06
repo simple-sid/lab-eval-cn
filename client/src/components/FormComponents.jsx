@@ -1,19 +1,64 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
 
-// Tab button component
-export const TabButton = ({ active, onClick, children }) => (
-  <button
+const formInputClasses = "w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500";
+const formNumberInputClasses = "w-24 border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500";
+
+export const TabButton = ({ active, onClick, children, curved = false }) => (
+  <div
     onClick={onClick}
-    className={`px-4 py-3 text-sm font-medium transition ${
-      active 
-        ? 'border-b-2 border-blue-500 text-blue-600' 
-        : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-    }`}
-    type="button"
+    className={`
+      relative px-5 py-2 text-sm font-medium
+      flex items-center space-x-2
+      cursor-pointer group
+      ${active
+        ? 'text-indigo-600 border-t-2 border-indigo-600 bg-white'
+        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}
+    `}
+    style={{
+      borderTopLeftRadius: curved && active ? '6px' : '0',
+      borderTopRightRadius: curved && active ? '6px' : '0',
+      marginRight: '2px',
+      position: curved && active ? 'relative' : 'static',
+    }}
+    role="button"
+    tabIndex={0}
   >
     {children}
-  </button>
+    
+    {/* Add pseudo-elements for the curved bottom effect when tab is active and curved */}
+    {curved && active && (
+      <>
+        <span className="absolute bottom-0 left-0 right-0 h-1 bg-white" />
+        
+        {/* Left bottom inverted curve */}
+        <span 
+          className="absolute bottom-0 left-0 w-2 h-2 bg-white"
+          style={{
+            transform: 'translateY(1px)',
+            boxShadow: '-3px 3px 0 0 white',
+            borderBottomLeftRadius: '5px',
+            marginLeft: '-1px',
+            zIndex: 5,
+          }}
+        />
+        
+        {/* Right bottom inverted curve */}
+        <span 
+          className="absolute bottom-0 right-0 w-2 h-2 bg-white"
+          style={{
+            transform: 'translateY(1px)',
+            boxShadow: '3px 3px 0 0 white',
+            borderBottomRightRadius: '5px',
+            marginRight: '-1px',
+            zIndex: 5,
+          }}
+        />
+      </>
+    )}
+  </div>
 );
+
+
 
 // Form section component
 export const FormSection = ({ title, children }) => (
@@ -76,7 +121,7 @@ export const TestCaseSection = ({ type, testCases, addTestCase, removeTestCase, 
                 value={tc.input} 
                 onChange={e => handleTestCaseChange(type, idx, 'input', e.target.value)} 
                 placeholder="Test input" 
-                className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={formInputClasses}
               />
             </div>
             <div>
@@ -85,7 +130,7 @@ export const TestCaseSection = ({ type, testCases, addTestCase, removeTestCase, 
                 value={tc.expectedOutput} 
                 onChange={e => handleTestCaseChange(type, idx, 'expectedOutput', e.target.value)} 
                 placeholder="Expected output" 
-                className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                className={formInputClasses} 
                 required 
               />
             </div>
@@ -95,7 +140,7 @@ export const TestCaseSection = ({ type, testCases, addTestCase, removeTestCase, 
                 value={tc.description} 
                 onChange={e => handleTestCaseChange(type, idx, 'description', e.target.value)} 
                 placeholder="What this test case verifies" 
-                className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                className={formInputClasses} 
               />
             </div>
             <div>
@@ -105,7 +150,7 @@ export const TestCaseSection = ({ type, testCases, addTestCase, removeTestCase, 
                 value={tc.points} 
                 onChange={e => handleTestCaseChange(type, idx, 'points', e.target.value)} 
                 placeholder="Points" 
-                className="w-24 border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                className={formNumberInputClasses} 
               />
             </div>
             <div>
@@ -115,7 +160,7 @@ export const TestCaseSection = ({ type, testCases, addTestCase, removeTestCase, 
                 value={tc.clientCount || ''}
                 onChange={e => handleTestCaseChange(type, idx, 'clientCount', e.target.value)}
                 placeholder="Enter client count for this test case"
-                className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className={formInputClasses}
               />
             </div>
             {showMatchTypeSelect && (
@@ -124,7 +169,7 @@ export const TestCaseSection = ({ type, testCases, addTestCase, removeTestCase, 
                 <select
                   value={tc.matchType || 'contains'}
                   onChange={e => handleTestCaseChange(type, idx, 'matchType', e.target.value)}
-                  className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={formInputClasses}
                 >
                   <option value="contains">Contains</option>
                   <option value="exact">Exact</option>

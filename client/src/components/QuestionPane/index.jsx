@@ -2,13 +2,11 @@ import { useState } from 'react';
 import TestCases from './TestCases';
 import Submissions from './Submissions';
 import TestSelector from './TestSelector';
+import QuestionTabs from './QuestionTabs';
 import { 
   XMarkIcon,
-  ClockIcon,
   AcademicCapIcon,
-  InformationCircleIcon,
-  BeakerIcon,
-  DocumentTextIcon
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 
 export default function QuestionPane({ 
@@ -82,58 +80,11 @@ export default function QuestionPane({
       </div>
 
       {/* Tabs */}
-      <div className="flex bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('description')}
-          className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-all duration-300 ${
-            activeTab === 'description'
-              ? 'text-indigo-600 bg-white border-b-2 border-indigo-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-          }`}
-        >
-          <DocumentTextIcon className="w-4 h-4" />
-          <span>Description</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('precode')}
-          className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-all duration-300 ${
-            activeTab === 'precode'
-              ? 'text-indigo-600 bg-white border-b-2 border-indigo-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-          }`}
-        >
-          <BeakerIcon className="w-4 h-4" />
-          <span>Pre-Code</span>
-        </button>        <button
-          onClick={() => setActiveTab('testcases')}
-          className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-all duration-300 ${
-            activeTab === 'testcases'
-              ? 'text-indigo-600 bg-white border-b-2 border-indigo-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-          }`}
-        >
-          <BeakerIcon className="w-4 h-4" />
-          <span>Test Cases</span>          <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-full font-semibold">
-            {
-              Array.isArray(question.testCases)
-                ? question.testCases.length
-                : ((question.testCases?.server?.length || 0) + 
-                   (question.testCases?.client?.length || 0))
-            }
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('submissions')}
-          className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-all duration-300 ${
-            activeTab === 'submissions'
-              ? 'text-indigo-600 bg-white border-b-2 border-indigo-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-          }`}
-        >
-          <ClockIcon className="w-4 h-4" />
-          <span>Submissions</span>
-        </button>
-      </div>
+      <QuestionTabs 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        question={question} 
+      />
 
       {/* Content */}
       <div className="flex-1 overflow-auto">

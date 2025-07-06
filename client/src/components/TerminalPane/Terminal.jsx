@@ -320,7 +320,7 @@ const TerminalComponent = ({
             runCmd = `python3 -u ${justFilename}`;
           } else if (language === 'c') {
             const exe = justFilename.replace(/\.c$/, '');
-            runCmd = `gcc ${justFilename} -o ${exe} && ./${exe}`;
+            runCmd = `gcc ${justFilename} -o ${exe} && ${exe}`;
           }
           wsRef.current.send(JSON.stringify({ type: 'input', data: `${runCmd}\n`, terminalId }));
         }, 200);
