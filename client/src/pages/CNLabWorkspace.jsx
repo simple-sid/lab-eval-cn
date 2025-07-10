@@ -488,8 +488,8 @@ export default function CNLabWorkspace() {
       window.dispatchEvent(new CustomEvent('run-file-in-terminal', {
         detail: {
           code: activeFile.code,
-          filename: fullPath, // use full path including current directory
-          filePath: fullPath, // use full path including current directory
+          filename: activeFile.name, // use full path including current directory
+          filePath: activeFile.path, // use full path including current directory
           language: activeFile.language || language
         }
       }));
@@ -525,53 +525,95 @@ export default function CNLabWorkspace() {
 
 
   //handle rename and code language change
-  const renameFile = (fileId, newName) => {
+  const renameFile = async (fileId, newName) => {
     const extension = newName.split('.').pop().toLowerCase();
 
     let detectedLanguage = 'plaintext';
     if (extension === 'py') detectedLanguage = 'python';
     else if (extension === 'c') detectedLanguage = 'c';
 
+    const file = files.find(f => f.id === fileId);
+    if (!file) return;
+
+    const oldPath = file.path;
+    const newPath = file.path
+      ? file.path.split('/').slice(0, -1).concat(newName).join('/')
+      : newName;
+
+    // Update frontend state
     setFiles(prevFiles =>
       prevFiles.map(f =>
         f.id === fileId
           ? {
               ...f,
               name: newName,
-              path: f.path
-                ? f.path.split('/').slice(0, -1).concat(newName).join('/')
-                : newName,
-              language: detectedLanguage //update language too
+              path: newPath,
+              language: detectedLanguage
             }
           : f
       )
     );
 
     setLanguage(detectedLanguage);
+
+    // Notify backend to rename inside container
+    try {
+      await fetch('http://localhost:5001/api/rename-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'testuser123',  // or dynamically get userId if you have JWT/session
+          oldPath,
+          newPath
+        })
+      });
+    } catch (err) {
+      console.error('Failed to rename file in container:', err);
+    }
   };
 
 
-  const updateFileLanguage = (fileId, newLang) => {
+  const updateFileLanguage = async (fileId, newLang) => {
     const newExt = newLang === 'c' ? 'c' : newLang === 'python' ? 'py' : '';
-    setFiles(prevFiles =>
-      prevFiles.map(f => {
-        if (f.id === fileId) {
-          const baseName = f.name.replace(/\.[^/.]+$/, ''); // remove old extension
-          const newName = `${baseName}.${newExt}`;
-          return {
-            ...f,
-            language: newLang,
-            name: newName,
-            path: f.path
-              ? f.path.split('/').slice(0, -1).concat(newName).join('/')
-              : newName
-          };
-        }
-        return f;
-      })
-    );
-  };
+    const file = files.find(f => f.id === fileId);
+    if (!file) return;
 
+    const baseName = file.name.replace(/\.[^/.]+$/, '');
+    const newName = `${baseName}.${newExt}`;
+    const oldPath = file.path;
+    const newPath = file.path
+      ? file.path.split('/').slice(0, -1).concat(newName).join('/')
+      : newName;
+
+    // Update frontend state
+    setFiles(prevFiles =>
+      prevFiles.map(f =>
+        f.id === fileId
+          ? {
+              ...f,
+              language: newLang,
+              name: newName,
+              path: newPath
+            }
+          : f
+      )
+    );
+
+    // Notify backend to rename file inside container
+    try {
+      await fetch('http://localhost:5001/api/rename-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'testuser123',
+          oldPath,
+          newPath
+        })
+      });
+    } catch (err) {
+      console.error('Failed to rename file in container:', err);
+    }
+  };
 
   const activeFile = files.find(f => f.id === activeFileId) || files[0];  
   const handleEvaluate = async () => {
@@ -595,7 +637,7 @@ export default function CNLabWorkspace() {
       });
 
       const response = await axios.post('http://localhost:5001/api/run-evaluate', {
-        filename: activeFile.path || activeFile.name,
+        filename: activeFile.name,
         code: activeFile.code,
         language: activeFile.language,
         evaluationScript,
