@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import TestCases from './TestCases';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 export default function TestSelector({ question, testCaseResults }) {
   const [activeTestType, setActiveTestType] = useState('server');

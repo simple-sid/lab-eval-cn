@@ -8,7 +8,8 @@ import {
   EyeSlashIcon,
   SparklesIcon,
   ArrowLeftIcon,
-  AcademicCapIcon
+  AcademicCapIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 
 export default function Header({ 
@@ -19,7 +20,9 @@ export default function Header({
   onToggleQuestion,
   isTeacherPage = false,
   backLink,
-  backText
+  backText,
+  moduleInfo,
+  loadingQuestions
 }) {
   return (
     <header className="bg-white/80 backdrop-blur-lg border-b border-gray-200/50 shadow-lg">
@@ -52,14 +55,36 @@ export default function Header({
             <h2 className="text-md font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-full">
               {title}
             </h2>
+            
+            {/* Module info pill in header */}
+            {moduleInfo && (
+              <div className="ml-2 flex items-center bg-indigo-50 rounded-full px-3 py-1 text-xs text-indigo-700 border border-indigo-100">
+                <InformationCircleIcon className="w-4 h-4 mr-1" />
+                <span className="mr-2 font-medium">{moduleInfo.time}</span>
+                <span className="font-medium">{moduleInfo.maxMarks || 'N/A'} Marks</span>
+              </div>
+            )}
+            
+            {/* Loading indicator */}
+            {loadingQuestions && (
+              <div className="ml-2 flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-700"></div>
+                <span className="ml-2 text-xs text-gray-600">Loading...</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Center section - Mobile title */}
-        <div className="md:hidden">
+        {/* Center section - Mobile title with module info */}
+        <div className="md:hidden flex flex-col items-center">
           <h2 className="text-lg font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent truncate max-w-xs">
             {title}
           </h2>
+          {moduleInfo && (
+            <div className="text-xs text-gray-500">
+              {moduleInfo.time} · {moduleInfo.maxMarks || 'N/A'} Marks
+            </div>
+          )}
         </div>
 
         {/* Right section */}

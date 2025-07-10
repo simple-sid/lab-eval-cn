@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Panel, PanelGroup } from 'react-resizable-panels';
 import axios from 'axios';
@@ -9,6 +8,20 @@ import TerminalPane from '../components/TerminalPane';
 import FileSelectorModal from '../components/EditorPane/fileSelectorModal';
 import ResizeHandle from '../components/shared/ResizeHandle';
 import { useIsMobile } from '../components/utils/useIsMobile';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
+
+// Create a hardcoded session ID for testing
+const TEST_SESSION_ID = "lab_session_" + Math.random().toString(36).substring(2, 15);
+
+// Save the session ID to localStorage if not already present
+if (!localStorage.getItem('labSessionId')) {
+  localStorage.setItem('labSessionId', TEST_SESSION_ID);
+  console.log('Created test lab session ID:', TEST_SESSION_ID);
+}
+
+// Helper function to get current lab session ID
+const getCurrentLabSession = () => localStorage.getItem('labSessionId') || TEST_SESSION_ID;
+
 
 const MobileTabs = ({ activeTab, setActiveTab, tabs }) => (
   <div className="flex bg-white border-b border-gray-200 shadow-sm">
@@ -39,6 +52,8 @@ const getCurrentDateTime = () => {
   return now.toISOString().slice(0, 19).replace('T', ' ');
 };
 
+// Real-time module handling will be implemented with WebSockets
+
 
 export default function CNLabWorkspace() {
   const isMobile = useIsMobile();
@@ -65,13 +80,152 @@ export default function CNLabWorkspace() {
     console.log(currentWorkingDir);
   }, [currentWorkingDir]);
 
-  // Load questions from public/questionPool.json
+  // Load questions from the assigned module
   const [questions, setQuestions] = useState([]);
+  const [moduleInfo, setModuleInfo] = useState(null);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const [moduleError, setModuleError] = useState(null);
+  
   useEffect(() => {
-    fetch('/questionPool.json')
-      .then(res => res.json())
-      .then(data => setQuestions(data))
-      .catch(err => console.error('Error loading questions:', err));
+    const fetchModuleData = async () => {
+      setLoadingQuestions(true);
+      setModuleError(null);
+      
+      try {
+        // Check if we have a module ID in localStorage (set by the teacher)
+        const moduleId = localStorage.getItem('currentModuleId');
+        
+        if (moduleId) {
+          console.log('Found module ID in localStorage:', moduleId);
+          
+          // Fetch the module directly using the module ID
+          const response = await axios.get(`http://localhost:5001/api/modules/${moduleId}`);
+          
+          if (response.data) {
+            const moduleData = response.data;
+            
+            // Set module info
+            setModuleInfo({
+              _id: moduleData._id,
+              name: moduleData.name,
+              description: moduleData.description,
+              maxMarks: moduleData.maxMarks,
+              time: moduleData.time || "Not specified",
+              date: moduleData.date
+            });
+            
+            // Fetch questions for this module if not already included
+            let questionsData = moduleData.questions;
+            
+            // If questions are just IDs, fetch the full question data
+            if (moduleData.questions.length > 0 && typeof moduleData.questions[0] === 'string') {
+              const questionsResponse = await axios.get(`http://localhost:5001/api/modules/${moduleId}/questions`);
+              questionsData = questionsResponse.data;
+            }
+            
+            // Format questions for the question pane
+            const formattedQuestions = questionsData.map(q => ({
+              id: q._id,
+              title: q.title,
+              description: q.description,
+              precode: q.precode || {},
+              clientPrecode: q.clientPrecode || {},
+              solution: q.solution || {},
+              clientSolution: q.clientSolution || {},
+              clientCount: q.clientCount || 1,
+              clientDelay: q.clientDelay || 0.5,
+              testCases: q.testCases || { server: [], client: [] }
+            }));
+            
+            setQuestions(formattedQuestions);
+          } else {
+            throw new Error('Failed to load module data');
+          }
+        } else {
+          // Fallback to static JSON if no module ID in localStorage
+          console.log('No module ID found, using static data');
+          const response = await fetch('/questionPool.json');
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch question data');
+          }
+          
+          const data = await response.json();
+          
+          setModuleInfo({
+            _id: "static_module",
+            name: "Computer Networks Lab (Demo)",
+            description: "TCP/IP Socket Programming Practice",
+            maxMarks: 50,
+            time: "2 hours",
+            date: new Date().toISOString()
+          });
+          
+          setQuestions(data);
+        }
+      } catch (error) {
+        console.error('Error loading module data:', error);
+        setModuleError(error.response?.data?.error || error.message || 'Failed to load questions');
+        
+        // Try to load from backup static source
+        try {
+          const backupResponse = await fetch('/questionPool.json');
+          if (!backupResponse.ok) throw new Error('Backup source unavailable');
+          
+          const backupData = await backupResponse.json();
+          setQuestions(backupData);
+          
+          // Create a fallback module
+          setModuleInfo({
+            _id: "fallback_module",
+            name: "Computer Networks Lab (Offline Mode)",
+            description: "Practice questions from local storage",
+            maxMarks: 50,
+            time: "Not timed",
+            date: new Date().toISOString()
+          });
+        } catch (backupError) {
+          console.error('Error loading backup questions:', backupError);
+          setQuestions([]);
+        }
+      }
+      
+      setLoadingQuestions(false);
+    };
+    
+    fetchModuleData();
+    
+    // Set up event listener for module changes
+    const handleModuleChange = () => {
+      console.log('Module change detected, refreshing...');
+      fetchModuleData();
+      
+      // Show notification to user
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("Module Updated", {
+          body: "The teacher has updated the module. Loading new content...",
+        });
+      }
+    };
+    
+    window.addEventListener('module-change', handleModuleChange);
+    
+    // Check for module changes periodically
+    const checkModuleInterval = setInterval(() => {
+      const newModuleId = localStorage.getItem('currentModuleId');
+      const prevModuleId = sessionStorage.getItem('loadedModuleId');
+      
+      if (newModuleId && newModuleId !== prevModuleId) {
+        console.log('New module detected:', newModuleId);
+        sessionStorage.setItem('loadedModuleId', newModuleId);
+        handleModuleChange();
+      }
+    }, 5000);
+    
+    return () => {
+      window.removeEventListener('module-change', handleModuleChange);
+      clearInterval(checkModuleInterval);
+    };
   }, []);
 
 
@@ -163,13 +317,28 @@ export default function CNLabWorkspace() {
 
   // When questions or activeQuestionIdx changes, set files from solution
   useEffect(() => {
-    if (questions && questions.length > 0 && questions[activeQuestionIdx] && questions[activeQuestionIdx].solution) {
-      const solution = questions[activeQuestionIdx].solution;
-      // Convert solution object to files array
-      const filesFromSolution = Object.entries(solution).map(([filename, code]) => {
+    if (questions && questions.length > 0 && questions[activeQuestionIdx]) {
+      const activeQuestion = questions[activeQuestionIdx];
+      
+      // During development, use solution code instead of precode
+      // In production, you would use precode instead:
+      // const fileMap = { ...activeQuestion.precode, ...(activeQuestion.clientPrecode || {}) };
+      
+      // Use solution code for both server and client files during development
+      const fileMap = { 
+        ...(activeQuestion.solution || {}),
+        ...(activeQuestion.clientSolution || {})
+      };
+      
+      // Convert file map to files array
+      const filesFromSolution = Object.entries(fileMap).map(([filename, code]) => {
         let lang = 'plaintext';
         if (filename.endsWith('.py')) lang = 'python';
         else if (filename.endsWith('.c')) lang = 'c';
+        else if (filename.endsWith('.js')) lang = 'javascript';
+        else if (filename.endsWith('.html')) lang = 'html';
+        else if (filename.endsWith('.css')) lang = 'css';
+        
         return {
           id: filename.replace(/\.[^/.]+$/, ''),
           name: filename.split('/').pop(), // just the filename
@@ -178,6 +347,7 @@ export default function CNLabWorkspace() {
           code: code
         };
       });
+      
       setFiles(filesFromSolution);
       if (filesFromSolution.length > 0) {
         setActiveFileId(filesFromSolution[0].id);
@@ -558,6 +728,14 @@ export default function CNLabWorkspace() {
     }
   }, [showTerminal]);
 
+  // Request notification permissions on component load
+  useEffect(() => {
+    // Check if browser supports notifications
+    if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   // Mobile layout
 
   // Mobile layout
@@ -622,11 +800,13 @@ export default function CNLabWorkspace() {
   return (
     <div className="flex flex-col h-screen bg-white">
       <Header
-        title={question ? question.title : 'No questions available'}
+        title={moduleInfo ? moduleInfo.name : (question ? question.title : 'No questions available')}
         onTimeUp={handleTimeUp}
         timeLimit={question && question.timeLimit ? question.timeLimit : 3600}
         showQuestion={showQuestion}
         onToggleQuestion={() => setShowQuestion(!showQuestion)}
+        moduleInfo={moduleInfo}
+        loadingQuestions={loadingQuestions}
       />
       
       <div className="flex-1 overflow-hidden">
@@ -636,13 +816,32 @@ export default function CNLabWorkspace() {
               {showQuestion && (
                 <>
                   <Panel defaultSize={35} minSize={25} maxSize={60} id="question-panel" order={1}>
-                    <QuestionPane 
-                      questions={questions}
-                      activeQuestionIdx={activeQuestionIdx}
-                      setActiveQuestionIdx={setActiveQuestionIdx}
-                      onClose={() => setShowQuestion(false)}
-                      testCaseResults={testCaseResults[questions[activeQuestionIdx]?.id] || []}
-                    />
+                    {loadingQuestions ? (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                          <p className="mt-2 text-gray-600">Loading questions...</p>
+                        </div>
+                      </div>
+                    ) : moduleError ? (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="text-center text-red-500 max-w-md mx-auto p-4">
+                          <InformationCircleIcon className="h-8 w-8 mx-auto mb-2" />
+                          <p>{moduleError}</p>
+                          <p className="text-sm mt-2 text-gray-600">
+                            Using fallback questions if available.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <QuestionPane 
+                        questions={questions}
+                        activeQuestionIdx={activeQuestionIdx}
+                        setActiveQuestionIdx={setActiveQuestionIdx}
+                        onClose={() => setShowQuestion(false)}
+                        testCaseResults={testCaseResults[questions[activeQuestionIdx]?.id] || []}
+                      />
+                    )}
                   </Panel>
                   <ResizeHandle />
                 </>

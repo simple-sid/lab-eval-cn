@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { 
   XMarkIcon,
+  PlusIcon,
   DocumentIcon,
   CodeBracketIcon,
   GlobeAltIcon,
@@ -129,6 +130,7 @@ export default function EditorTabs({
           </div>
         </TabButton>
       ))}
+      
     </div>
   );
 }

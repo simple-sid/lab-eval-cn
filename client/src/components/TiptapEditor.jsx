@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import axios from 'axios';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -9,12 +10,14 @@ import Heading from '@tiptap/extension-heading';
 import ListItem from '@tiptap/extension-list-item';
 import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
-import { Node } from '@tiptap/core';
+import { Node, mergeAttributes } from '@tiptap/core';
+import CodeBlock from '@tiptap/extension-code-block';
 import ResizeImage from 'tiptap-extension-resize-image';
 import TextStyle from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import FontFamily from '@tiptap/extension-font-family'
 import FontSize from './tiptap-extension-font-size'
+import { processCodeBlocks } from './utils/codeBlockHelper';
 
 // Page break extension for manual page breaks
 const PageBreak = Node.create({
@@ -31,6 +34,68 @@ const PageBreak = Node.create({
     return {
       setPageBreak: () => ({ chain }) => {
         return chain().insertContent('<hr class="page-break" />').run()
+      },
+    }
+  },
+});
+
+// Custom CodeBlock extension that ensures code stays in a single block - simplified version
+const SimpleCodeBlock = Node.create({
+  name: 'codeBlock',
+  group: 'block',
+  content: 'text*',
+  marks: '',
+  defining: true,
+  code: true,
+  
+  addAttributes() {
+    return {
+      language: {
+        default: null,
+      },
+    }
+  },
+  
+  parseHTML() {
+    return [
+      { tag: 'pre', preserveWhitespace: 'full' },
+      { tag: 'code', preserveWhitespace: 'full' },
+    ]
+  },
+  
+  renderHTML({ HTMLAttributes }) {
+    return ['pre', ['code', HTMLAttributes, 0]]
+  },
+  
+  addCommands() {
+    return {
+      setCodeBlock: () => ({ commands }) => {
+        return commands.setNode(this.name)
+      },
+      toggleCodeBlock: () => ({ commands }) => {
+        return commands.toggleNode(this.name, 'paragraph')
+      },
+    }
+  },
+  
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Alt-c': () => this.editor.commands.toggleCodeBlock(),
+      // Override 'Enter' to insert a newline instead of splitting the code block
+      Enter: ({ editor }) => {
+        if (editor.isActive('codeBlock')) {
+          editor.commands.insertContent('\n')
+          return true
+        }
+        return false
+      },
+      // Ensure Tab key inserts spaces instead of moving focus
+      Tab: ({ editor }) => {
+        if (editor.isActive('codeBlock')) {
+          editor.commands.insertContent('  ')
+          return true
+        }
+        return false
       },
     }
   },
@@ -55,7 +120,9 @@ export default function TiptapEditor({ value, onChange }) {
         listItem: false,
         bulletList: false,
         orderedList: false,
+        codeBlock: false, // Disable default code block
       }),
+      SimpleCodeBlock, // Use our simpler code block implementation
       TextStyle,
       Color,
       FontFamily,
@@ -173,6 +240,46 @@ export default function TiptapEditor({ value, onChange }) {
         margin-top: 0.25em;
         margin-bottom: 0.25em;
       }
+      
+      /* Code block styling - very simple and clean */
+      pre {
+        background-color: #f8f8f8 !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 6px !important;
+        padding: 0.75rem 1rem !important;
+        margin: 1rem 0 !important;
+        overflow-x: auto !important;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+        font-size: 0.9rem !important;
+        line-height: 1.5 !important;
+        tab-size: 2 !important;
+        white-space: pre !important;
+      }
+      
+      pre code {
+        background-color: transparent !important;
+        padding: 0 !important;
+        border: none !important;
+        display: block !important;
+        color: #374151 !important;
+        white-space: pre !important;
+        font-family: inherit !important;
+        font-size: inherit !important;
+      }
+      
+      code {
+        background-color: #f1f5f9 !important;
+        border-radius: 3px !important;
+        padding: 0.1em 0.3em !important;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+        font-size: 0.9em !important;
+        color: #4b5563 !important;
+      }
+      
+      /* Ensure line breaks in code blocks don't break the code block */
+      .ProseMirror pre br {
+        display: inline !important;
+      }
     `;
     document.head.appendChild(style);
     
@@ -194,13 +301,24 @@ export default function TiptapEditor({ value, onChange }) {
     input.onchange = async () => {
       if (input.files?.length) {
         const file = input.files[0];
-        const reader = new FileReader();
         
-        reader.onload = (e) => {
-          editor.chain().focus().setImage({ src: e.target.result }).run();
-        };
-        
-        reader.readAsDataURL(file);
+        // Upload to server instead of using base64
+        try {
+          const formData = new FormData();
+          formData.append('image', file);
+          const response = await axios.post('http://localhost:5001/api/questions/upload-image', formData);
+          
+          // Use the returned URL in the editor
+          if (response.data.success) {
+            editor.chain().focus().setImage({ src: response.data.url }).run();
+          } else {
+            console.error('Image upload failed:', response.data);
+            alert('Failed to upload image');
+          }
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          alert('Error uploading image');
+        }
       }
     };
     
@@ -282,6 +400,28 @@ export default function TiptapEditor({ value, onChange }) {
 
     document.body.removeChild(tempContainer);
   };
+
+  // Update onChange to process content
+  useEffect(() => {
+    if (editor) {
+      const originalOnUpdate = editor.options.onUpdate;
+      editor.options.onUpdate = ({ editor }) => {
+        const content = editor.getHTML();
+        const processedContent = processCodeBlocks(content);
+        onChange(processedContent);
+      };
+    }
+  }, [editor, onChange]);
+
+  // Process initial content
+  useEffect(() => {
+    if (editor && value) {
+      const processedValue = processCodeBlocks(value);
+      if (processedValue !== value) {
+        editor.commands.setContent(processedValue);
+      }
+    }
+  }, []);
 
   return (
     <div className="border rounded-md overflow-hidden shadow-sm transition focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 position-relative">
@@ -403,9 +543,11 @@ export default function TiptapEditor({ value, onChange }) {
 
         <div className="h-6 border-r border-gray-300 mx-1"></div>
 
-        {/* Code Block */}
+        {/* Code Block - Simple Implementation */}
         <EditorButton 
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          onClick={() => {
+            editor.chain().focus().toggleCodeBlock().run();
+          }}
           isActive={editor.isActive('codeBlock')}
           title="Code Block"
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>}

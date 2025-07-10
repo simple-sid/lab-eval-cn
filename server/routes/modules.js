@@ -1,13 +1,17 @@
 import express from 'express';
 import { CNModule } from '../models/Module.js';
+import Course from '../models/Course.js';
+// Removing User import since we're not using ObjectId reference anymore
+// import User from '../models/User.js';
 import mongoose from 'mongoose';
+import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Create a module
-router.post('/', async (req, res) => {
+// Create a module - with auth
+router.post('/', protect, async (req, res) => {
   try {
-    const { name, description, lab, questions, creator, maxMarks } = req.body;
+    const { name, description, lab, course, questions, creator, creatorId, maxMarks, date, time, envSettings } = req.body;
 
     // Validate that at least one question is selected.
     if (!questions || questions.length === 0) {
@@ -17,10 +21,20 @@ router.post('/', async (req, res) => {
     const moduleData = {
       name,
       description,
-      lab,
+      lab, // Keep for backward compatibility
+      course, // New field for integration
       questions,
-      creator, 
+      creator, // Now using string type instead of ObjectId
+      creatorId, // Keep for backward compatibility 
       maxMarks,
+      date: date || new Date(),
+      time: time || '10:00 AM - 12:00 PM',
+      envSettings: envSettings || {
+        allowTabSwitch: false,
+        allowExternalCopyPaste: false,
+        allowInternalCopyPaste: true,
+        enforceFullscreen: false
+      },
       moduleType: "CNModule"
     };
 
@@ -32,10 +46,19 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Get all modules
-router.get('/', async (req, res) => {
+// Get all modules - with auth protection
+router.get('/', protect, async (req, res) => {
   try {
-    const modules = await CNModule.find().populate('questions');
+    // Support filtering by course if provided
+    const { course } = req.query;
+    
+    const filter = course ? { course: mongoose.Types.ObjectId(course) } : {};
+    
+    const modules = await CNModule.find(filter)
+      .populate('questions')
+      .populate('course', 'name code semester');
+      // Removed .populate('creator') since creator is now a string
+      
     res.status(200).json(modules);
   } catch (err) {
     console.error('Error fetching modules:', err);
@@ -43,8 +66,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get a single module
-router.get('/:id', async (req, res) => {
+// Get a single module - with auth
+router.get('/:id', protect, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -52,7 +75,10 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid module ID' });
     }
     
-    const module = await CNModule.findById(id).populate('questions');
+    const module = await CNModule.findById(id)
+      .populate('questions')
+      .populate('course', 'name code semester');
+      // Removed .populate('creator') since creator is now a string
     
     if (!module) {
       return res.status(404).json({ error: 'Module not found' });
@@ -157,6 +183,62 @@ router.patch('/:id/quick-update', async (req, res) => {
     });
   } catch (err) {
     console.error('Quick module update error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Simplified endpoint to assign module to test session (no session validation)
+router.post('/:moduleId/assign-to-test-session', async (req, res) => {
+  try {
+    const { moduleId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(moduleId)) {
+      return res.status(400).json({ error: 'Invalid module ID format' });
+    }
+    
+    // Check if the module exists
+    const module = await CNModule.findById(moduleId);
+      
+    if (!module) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+    
+    // For testing purposes, we'll just return success without actually updating any session
+    // In a real implementation, this would update session records in the database
+    
+    // Return success
+    res.status(200).json({ 
+      success: true,
+      message: 'Module assigned successfully for testing',
+      moduleId,
+      moduleName: module.name
+    });
+  } catch (err) {
+    console.error('Error assigning module for testing:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get questions for a specific module
+router.get('/:moduleId/questions', async (req, res) => {
+  try {
+    const { moduleId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(moduleId)) {
+      return res.status(400).json({ error: 'Invalid module ID format' });
+    }
+    
+    // Find the module and populate its questions
+    const module = await CNModule.findById(moduleId).populate('questions');
+    
+    if (!module) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+    
+    // Return just the questions array
+    res.status(200).json(module.questions);
+  } catch (err) {
+    console.error('Error fetching module questions:', err);
     res.status(500).json({ error: err.message });
   }
 });

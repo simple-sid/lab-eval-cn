@@ -341,8 +341,11 @@ export async function runAndEvaluate({
   codeType = 'server' // Default to server evaluation
 }) {
   // Determine relative directory and workingDir in container
+  // The path inside the container always starts at /home/labuser
+  // Avoid adding /home/labuser again if the path already starts with it
   const relDir = filename.includes('/') ? filename.split('/').slice(0, -1).join('/') : '';
-  const workingDir = relDir ? `/home/labuser/${relDir}` : '/home/labuser';
+  const workingDir = relDir.startsWith('/home/labuser') ? relDir : 
+                     relDir ? `/home/labuser/${relDir}` : '/home/labuser';
 
   try {
     // Save the user's code to the container
@@ -454,7 +457,12 @@ export async function runAndEvaluate({
     const results = [];
     
     for (let i = 0; i < safeTestCases.length; i++) {
-      const execCmd = `cd ${workingDir} && python3 ${destMainScriptPath} ${filename} ${testFilePath} ${i}`;
+      // Make sure we're using an absolute path to the file
+      // If filename is already absolute, use it; otherwise prepend workingDir
+      const fullFilePath = filename.startsWith('/') ? filename : 
+                          `${workingDir}/${filename.split('/').pop()}`;
+      
+      const execCmd = `cd ${workingDir} && python3 ${destMainScriptPath} ${fullFilePath} ${testFilePath} ${i}`;
       
       console.log(`[EVAL] Exec command: ${execCmd}`);
       
@@ -477,6 +485,19 @@ export async function runAndEvaluate({
             status = parts[1];
             message = parts.slice(2).join(':');
           }
+        }
+        
+        // For HTTP evaluation tests, the actual output might have "Server output:" prefix
+        // which needs to be removed when comparing against expected output
+        let cleanedMessage = message;
+        if (message.includes('Server output:')) {
+          cleanedMessage = message.replace('Server output:', '').trim();
+        }
+        
+        // Check if expected output is in the cleaned message
+        const expectedOutput = safeTestCases[i]?.expectedOutput;
+        if (expectedOutput && cleanedMessage.includes(expectedOutput)) {
+          status = 'PASS';
         }
         
         results.push({

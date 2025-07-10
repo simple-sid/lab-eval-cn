@@ -24,28 +24,9 @@ const SendModuleModal = ({ isOpen, onClose, sessions, selectedSessionId, setSele
             </div>
           )}
           
-          <div className="mb-4">
-            <label htmlFor="session" className="block text-sm font-medium text-gray-700 mb-1">
-              Select Active Lab Session
-            </label>
-            <select
-              id="session"
-              value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Select a session...</option>
-              {sessions.map((session) => (
-                <option key={session._id} value={session.sessionId}>
-                  {session.name} ({session.studentCount} students)
-                </option>
-              ))}
-            </select>
-          </div>
-          
           <div className="mt-4 p-3 bg-blue-50 rounded-md">
             <p className="text-sm text-blue-800">
-              <span className="font-medium">Note:</span> This will make the module available to all students in the selected lab session.
+              <span className="font-medium">Note:</span> This will make the module available to all test students. For demo purposes, session selection has been simplified.
             </p>
           </div>
         </div>
@@ -61,7 +42,7 @@ const SendModuleModal = ({ isOpen, onClose, sessions, selectedSessionId, setSele
           <button
             type="button"
             onClick={onSend}
-            disabled={!selectedSessionId || isLoading}
+            disabled={isLoading}
             className="py-2 px-4 border border-transparent rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 flex items-center"
           >
             {isLoading ? (

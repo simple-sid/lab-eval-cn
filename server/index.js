@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 import apiRoutes from './routes/index.js';
 import { initSSHWebSocket } from './controllers/sshController.js';
 import { connectDB, disconnectDB } from './utils/db.js'; 
@@ -21,7 +22,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from public directory
-app.use(express.static('public'));
+// Make sure path is absolute to avoid any path resolution issues
+app.use(express.static(path.join(process.cwd(), 'public')));
+// Explicitly serve uploads directory
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
 // REST API routes
 app.use('/api', apiRoutes);

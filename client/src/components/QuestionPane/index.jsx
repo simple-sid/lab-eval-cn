@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import TestCases from './TestCases';
+import { useState, useEffect } from 'react';
 import Submissions from './Submissions';
 import TestSelector from './TestSelector';
 import QuestionTabs from './QuestionTabs';
+import { processCodeBlocks } from '../utils/codeBlockHelper';
 import { 
   XMarkIcon,
   AcademicCapIcon,
@@ -25,6 +25,14 @@ export default function QuestionPane({
   }
   const [activeTab, setActiveTab] = useState('description');
   const question = questions[activeQuestionIdx];
+  const [processedDescription, setProcessedDescription] = useState('');
+  
+  // Process description to fix code blocks when question changes
+  useEffect(() => {
+    if (question && question.description) {
+      setProcessedDescription(processCodeBlocks(question.description));
+    }
+  }, [question]);
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 to-white">
@@ -92,12 +100,12 @@ export default function QuestionPane({
           <div className="p-6 fade-in-up space-y-4">
             <div 
               className="prose prose-sm max-w-none leading-relaxed text-[15px]"
-              dangerouslySetInnerHTML={{ __html: question.description.replace(/\n/g, '<br/>') }}
+              dangerouslySetInnerHTML={{ __html: processedDescription || question.description }}
             />
-            {/* Render image if question.image is present */}
+            {/* Render separate image if question.image is present */}
             {question.image && (
               <img
-                src={question.image}
+                src={question.image.startsWith('http') ? question.image : `http://localhost:5001${question.image}`}
                 alt="Question Illustration"
                 className="mt-4 rounded-lg border border-gray-200 shadow-sm max-w-full"
                 style={{ maxHeight: 320 }}

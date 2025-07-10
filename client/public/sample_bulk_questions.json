@@ -1,0 +1,385 @@
+[
+  {
+    "title": "Concurrent Date-Time Server",
+    "description": "<p><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\">Build a connection-oriented iterative server that sends the current date and time to each client. Extend the server to handle multiple clients concurrently using process-based forking.</span><br><br><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\">In this lab, you will design a TCP server that listens for incoming client connections on a specified port. When a client connects, the server should fork a new process to handle the client, send the current system date and time, and then close the connection. The main server process should continue to accept new clients. This exercise will help you understand socket programming, process management, and concurrent server design in C.</span><br><br><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\"><strong>Key learning objectives:</strong></span></p><ul class=\"list-disc ml-2\"><li><p><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\">Understand the basics of TCP socket programming in C</span></p></li><li><p><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\">Learn how to use fork() to handle multiple clients concurrently</span></p></li><li><p><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\">Practice sending and receiving data over sockets</span></p></li><li><p><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\">Implement robust error handling for network programs</span></p></li></ul><p></p><p><span style=\"color: rgb(55, 65, 81); font-family: ui-sans-serif, system-ui, sans-serif, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;, &quot;Noto Color Emoji&quot;; font-size: 15px\">Test your implementation by connecting multiple clients (e.g., using telnet or your own client program) and verifying that each receives the correct date and time.</span></p><img src=\"http://localhost:5001/uploads/1751860773959-553921720.jpg\" style=\"width: 643px; height: auto; cursor: pointer;\" draggable=\"true\">",
+    "maxMarks": 15,
+    "precode": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nvoid handle_client(int connfd);\n\nint main() {\n    // TODO: Create socket, bind, listen, accept connections, fork to handle clients\n    return 0;\n}\n\nvoid handle_client(int connfd) {\n    // TODO: Send current date and time to client\n}"
+    },
+    "solution": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <sys/types.h>\n#include <time.h>\n\n#define PORT 8080\n#define MAX_PENDING 5\n\nvoid handle_client(int connfd) {\n    time_t now = time(NULL);\n    char *dt = ctime(&now);\n    send(connfd, dt, strlen(dt), 0);\n    close(connfd);\n}\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd == -1) {\n        perror(\"socket failed\");\n        exit(1);\n    }\n\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    if (bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"bind failed\");\n        exit(1);\n    }\n\n    listen(sockfd, MAX_PENDING);\n    printf(\"Server listening on port %d...\\n\", PORT);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        if (connfd < 0) {\n            perror(\"accept failed\");\n            continue;\n        }\n\n        if (fork() == 0) {\n            close(sockfd);\n            handle_client(connfd);\n            exit(0);\n        } else {\n            close(connfd);\n        }\n    }\n\n    return 0;\n}"
+    },
+    "clientPrecode": {
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#define PORT 8080\n\nint main() {\n    // TODO: Connect to server, receive date-time string, print it\n    return 0;\n}"
+    },
+    "clientSolution": {
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n\n#define PORT 8080\n\nint main() {\n    int sockfd;\n    struct sockaddr_in servaddr;\n    char buffer[128];\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd < 0) {\n        perror(\"Socket creation failed\");\n        return 1;\n    }\n\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_port = htons(PORT);\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n\n    if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"Connection failed\");\n        return 1;\n    }\n\n    recv(sockfd, buffer, sizeof(buffer), 0);\n    printf(\"Server Time: %s\\n\", buffer);\n\n    close(sockfd);\n    return 0;\n}"
+    },
+    "clientCount": 1,
+    "clientDelay": 0.5,
+    "testCases": {
+      "server": [
+        {
+          "input": "",
+          "expectedOutput": "Current date-time",
+          "description": "Server should send system date-time",
+          "points": 5,
+          "matchType": "datetime",
+          "clientCount": 1
+        },
+        {
+          "input": "",
+          "expectedOutput": "Current date-time",
+          "description": "Multiple clients should receive date-time",
+          "points": 5,
+          "matchType": "datetime",
+          "clientCount": 3
+        }
+      ],
+      "client": [
+        {
+          "input": "undefined",
+          "expectedOutput": "Server Time:",
+          "description": "Client output should contain 'Server Time:' prefix.",
+          "points": 5,
+          "matchType": "contains",
+          "clientCount": null
+        },
+        {
+          "input": "undefined",
+          "expectedOutput": "Server Time:",
+          "description": "Client should print the date-time string received from the server.",
+          "points": 5,
+          "matchType": "contains"
+        },
+        {
+          "input": "undefined",
+          "expectedOutput": "Server Time:",
+          "description": "Multiple clients should all print valid date-time strings.",
+          "points": 5,
+          "matchType": "contains",
+          "clientCount": 3
+        }
+      ]
+    },
+    "evaluationScript": ""
+  },
+  {
+    "title": "Basic TCP Server",
+    "description": "<h2>Create a Basic TCP Server</h2><p>Implement a basic TCP server that can accept connections from clients and echo back any messages received.</p><p>The server should:</p><ul><li>Listen on port 8080</li><li>Accept multiple client connections</li><li>Echo back any messages received from clients</li><li>Close the connection when the client sends 'exit'</li></ul><p>Use the socket API for implementation.</p>",
+    "maxMarks": 15,
+    "precode": {
+      "server.c": "// Add your TCP server implementation here\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n\nint main() {\n    // Your code here\n    \n    return 0;\n}"
+    },
+    "solution": {
+      "server.c": "// TCP Server Implementation\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n\n#define PORT 8080\n#define BUFFER_SIZE 1024\n\nint main() {\n    int server_fd, new_socket;\n    struct sockaddr_in address;\n    int opt = 1;\n    int addrlen = sizeof(address);\n    char buffer[BUFFER_SIZE] = {0};\n    \n    // Creating socket file descriptor\n    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {\n        perror(\"socket failed\");\n        exit(EXIT_FAILURE);\n    }\n    \n    // Attach socket to the port 8080\n    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {\n        perror(\"setsockopt\");\n        exit(EXIT_FAILURE);\n    }\n    address.sin_family = AF_INET;\n    address.sin_addr.s_addr = INADDR_ANY;\n    address.sin_port = htons(PORT);\n    \n    // Bind the socket to the network address and port\n    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {\n        perror(\"bind failed\");\n        exit(EXIT_FAILURE);\n    }\n    \n    // Listen for connections\n    if (listen(server_fd, 3) < 0) {\n        perror(\"listen\");\n        exit(EXIT_FAILURE);\n    }\n    \n    printf(\"Server listening on port %d\\n\", PORT);\n    \n    while(1) {\n        printf(\"Waiting for connections...\\n\");\n        \n        // Accept a new connection\n        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {\n            perror(\"accept\");\n            continue;\n        }\n        \n        printf(\"Connection accepted\\n\");\n        \n        // Handle client communication\n        while(1) {\n            memset(buffer, 0, BUFFER_SIZE);\n            int valread = read(new_socket, buffer, BUFFER_SIZE);\n            \n            if (valread <= 0) {\n                printf(\"Client disconnected\\n\");\n                break;\n            }\n            \n            printf(\"Received: %s\\n\", buffer);\n            \n            // Check if client wants to exit\n            if (strncmp(buffer, \"exit\", 4) == 0) {\n                printf(\"Client requested to exit\\n\");\n                break;\n            }\n            \n            // Echo back the message\n            send(new_socket, buffer, strlen(buffer), 0);\n            printf(\"Echo message sent\\n\");\n        }\n        \n        close(new_socket);\n    }\n    \n    return 0;\n}"
+    },
+    "clientPrecode": {
+      "client.c": "// Add your TCP client implementation here\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <arpa/inet.h>\n\nint main() {\n    // Your code here\n    \n    return 0;\n}"
+    },
+    "clientSolution": {
+      "client.c": "// TCP Client Implementation\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <arpa/inet.h>\n\n#define PORT 8080\n#define BUFFER_SIZE 1024\n\nint main() {\n    int sock = 0;\n    struct sockaddr_in serv_addr;\n    char buffer[BUFFER_SIZE] = {0};\n    char message[BUFFER_SIZE];\n    \n    // Creating socket file descriptor\n    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {\n        printf(\"\\n Socket creation error \\n\");\n        return -1;\n    }\n    \n    serv_addr.sin_family = AF_INET;\n    serv_addr.sin_port = htons(PORT);\n    \n    // Convert IPv4 and IPv6 addresses from text to binary form\n    if(inet_pton(AF_INET, \"127.0.0.1\", &serv_addr.sin_addr) <= 0) {\n        printf(\"\\nInvalid address/ Address not supported \\n\");\n        return -1;\n    }\n    \n    // Connect to the server\n    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {\n        printf(\"\\nConnection Failed \\n\");\n        return -1;\n    }\n    \n    printf(\"Connected to server\\n\");\n    \n    while(1) {\n        printf(\"Enter message: \");\n        fgets(message, BUFFER_SIZE, stdin);\n        \n        // Remove newline character\n        message[strcspn(message, \"\\n\")] = 0;\n        \n        // Send message to server\n        send(sock, message, strlen(message), 0);\n        printf(\"Message sent\\n\");\n        \n        // Check if we want to exit\n        if (strcmp(message, \"exit\") == 0) {\n            printf(\"Exiting...\\n\");\n            break;\n        }\n        \n        // Receive response from server\n        memset(buffer, 0, BUFFER_SIZE);\n        int valread = read(sock, buffer, BUFFER_SIZE);\n        printf(\"Server: %s\\n\", buffer);\n    }\n    \n    close(sock);\n    return 0;\n}"
+    },
+    "clientCount": 1,
+    "clientDelay": 0.5,
+    "testCases": {
+      "server": [
+        {
+          "input": "hello",
+          "expectedOutput": "hello",
+          "description": "Test if server echoes 'hello'",
+          "points": 5,
+          "matchType": "exact"
+        },
+        {
+          "input": "test message",
+          "expectedOutput": "test message",
+          "description": "Test if server echoes 'test message'",
+          "points": 5,
+          "matchType": "exact"
+        }
+      ],
+      "client": []
+    },
+    "evaluationScript": "# Evaluation script for TCP echo server\nimport socket\nimport time\n\ndef evaluate(server_port=8080):\n    # Test connection\n    try:\n        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n        s.connect(('localhost', server_port))\n        s.settimeout(2)  # 2 second timeout\n        \n        # Test echo functionality\n        test_message = \"Hello, server!\"\n        s.send(test_message.encode())\n        response = s.recv(1024).decode()\n        \n        if response == test_message:\n            print(\"PASS: Echo test successful\")\n        else:\n            print(\"FAIL: Echo test failed\")\n            print(f\"Expected: {test_message}\")\n            print(f\"Received: {response}\")\n        \n        # Test exit functionality\n        s.send(\"exit\".encode())\n        s.close()\n        return True\n    except Exception as e:\n        print(f\"FAIL: {str(e)}\")\n        return False\n\n# Run the evaluation\nevaluate()"
+  },
+  {
+    "title": "UDP Client-Server Communication",
+    "description": "<h2>UDP Client-Server Communication</h2><p>Implement a UDP server and client that can communicate with each other. The server should receive messages from the client, convert them to uppercase, and send them back.</p><p>The server should:</p><ul><li>Listen on port 8081</li><li>Receive UDP datagrams from clients</li><li>Convert received messages to uppercase</li><li>Send the uppercase message back to the client</li></ul><p>The client should:</p><ul><li>Send messages to the server</li><li>Receive and display the response</li><li>Exit when the user types 'exit'</li></ul>",
+    "maxMarks": 15,
+    "precode": {
+      "server.c": "// UDP Server Implementation\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/types.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <ctype.h>\n\n#define PORT 8081\n#define BUFFER_SIZE 1024\n\nint main() {\n    // Your code here\n    \n    return 0;\n}"
+    },
+    "solution": {
+      "server.c": "// UDP Server Implementation\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/types.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <ctype.h>\n\n#define PORT 8081\n#define BUFFER_SIZE 1024\n\nint main() {\n    int sockfd;\n    char buffer[BUFFER_SIZE];\n    struct sockaddr_in servaddr, cliaddr;\n    \n    // Creating socket file descriptor\n    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {\n        perror(\"socket creation failed\");\n        exit(EXIT_FAILURE);\n    }\n    \n    memset(&servaddr, 0, sizeof(servaddr));\n    memset(&cliaddr, 0, sizeof(cliaddr));\n    \n    // Filling server information\n    servaddr.sin_family = AF_INET; // IPv4\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n    \n    // Bind the socket with the server address\n    if (bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"bind failed\");\n        exit(EXIT_FAILURE);\n    }\n    \n    printf(\"UDP Server listening on port %d\\n\", PORT);\n    \n    int len, n;\n    len = sizeof(cliaddr);\n    \n    while(1) {\n        n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, \n                   0, (struct sockaddr *) &cliaddr, &len);\n        buffer[n] = '\\0';\n        printf(\"Client: %s\\n\", buffer);\n        \n        // Convert message to uppercase\n        for (int i = 0; i < n; i++) {\n            buffer[i] = toupper(buffer[i]);\n        }\n        \n        sendto(sockfd, (const char *)buffer, strlen(buffer), \n               0, (const struct sockaddr *) &cliaddr, len);\n        printf(\"Message sent to client\\n\");\n    }\n    \n    return 0;\n}"
+    },
+    "clientPrecode": {
+      "client.c": "// UDP Client Implementation\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\n#include <string.h>\n#include <sys/types.h>\n#include <sys/socket.h>\n#include <arpa/inet.h>\n#include <netinet/in.h>\n\n#define PORT 8081\n#define BUFFER_SIZE 1024\n\nint main() {\n    // Your code here\n    \n    return 0;\n}"
+    },
+    "clientSolution": {
+      "client.c": "// UDP Client Implementation\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\n#include <string.h>\n#include <sys/types.h>\n#include <sys/socket.h>\n#include <arpa/inet.h>\n#include <netinet/in.h>\n\n#define PORT 8081\n#define BUFFER_SIZE 1024\n\nint main() {\n    int sockfd;\n    char buffer[BUFFER_SIZE];\n    char message[BUFFER_SIZE];\n    struct sockaddr_in servaddr;\n    \n    // Creating socket file descriptor\n    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {\n        perror(\"socket creation failed\");\n        exit(EXIT_FAILURE);\n    }\n    \n    memset(&servaddr, 0, sizeof(servaddr));\n    \n    // Filling server information\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_port = htons(PORT);\n    servaddr.sin_addr.s_addr = inet_addr(\"127.0.0.1\");\n    \n    int n;\n    unsigned int len;\n    \n    while(1) {\n        printf(\"Enter message: \");\n        fgets(message, BUFFER_SIZE, stdin);\n        \n        // Remove newline character\n        message[strcspn(message, \"\\n\")] = 0;\n        \n        // Check if user wants to exit\n        if (strcmp(message, \"exit\") == 0) {\n            printf(\"Exiting...\\n\");\n            break;\n        }\n        \n        // Send message to server\n        sendto(sockfd, (const char *)message, strlen(message),\n               0, (const struct sockaddr *) &servaddr, \n               sizeof(servaddr));\n        printf(\"Message sent to server\\n\");\n        \n        // Receive server's response\n        n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, \n                     0, (struct sockaddr *) &servaddr,\n                     &len);\n        buffer[n] = '\\0';\n        printf(\"Server: %s\\n\", buffer);\n    }\n    \n    close(sockfd);\n    return 0;\n}"
+    },
+    "clientCount": 1,
+    "clientDelay": 0.5,
+    "testCases": {
+      "server": [
+        {
+          "input": "hello",
+          "expectedOutput": "HELLO",
+          "description": "Test if server converts 'hello' to uppercase",
+          "points": 5,
+          "matchType": "exact"
+        },
+        {
+          "input": "test message",
+          "expectedOutput": "TEST MESSAGE",
+          "description": "Test if server converts 'test message' to uppercase",
+          "points": 5,
+          "matchType": "exact"
+        }
+      ],
+      "client": []
+    },
+    "evaluationScript": "# Evaluation script for UDP uppercase server\nimport socket\nimport time\n\ndef evaluate(server_port=8081):\n    try:\n        # Create UDP socket\n        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        s.settimeout(2)  # 2 second timeout\n        \n        # Send test message\n        server_address = ('localhost', server_port)\n        test_message = \"Hello, udp server!\"\n        s.sendto(test_message.encode(), server_address)\n        \n        # Receive response\n        data, _ = s.recvfrom(1024)\n        response = data.decode()\n        expected = test_message.upper()\n        \n        if response == expected:\n            print(\"PASS: Uppercase conversion test successful\")\n        else:\n            print(\"FAIL: Uppercase conversion test failed\")\n            print(f\"Expected: {expected}\")\n            print(f\"Received: {response}\")\n        \n        s.close()\n        return True\n    except Exception as e:\n        print(f\"FAIL: {str(e)}\")\n        return False\n\n# Run the evaluation\nevaluate()"
+  },
+  {
+    "title": "HTTP Simulation – Non-Persistent Connection",
+    "description": "<p>Simulate a client-server system where the client sends HTTP GET requests for marks using a separate TCP connection for each course.</p><img src=\"http://localhost:5001/uploads/1751863863926-104121637.png\" alt=\"\" style=\"\" draggable=\"true\"><p><strong>Code to determine the time taken: </strong></p><pre><code>// Headers to be included: time.h \nclock_t tStart = clock(); \n/* CODE for which the time taken for execution is to be determined*/ \ndouble t=(double)(clock() - tStart) / CLOCKS_PER_SEC; \nprintf(\"Time taken (in seconds) : %f\", t);</code></pre>",
+    "maxMarks": 5,
+    "precode": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nvoid handleRequest(int connfd);\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));\n    listen(sockfd, 5);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        handleRequest(connfd);\n        close(connfd);\n    }\n    return 0;\n}\n\nvoid handleRequest(int connfd) {\n    // TODO: parse GET request and return simulated mark\n}"
+    },
+    "solution": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nvoid handleRequest(int connfd) {\n    char buffer[4096];\n    char response[8192];\n    int n = read(connfd, buffer, sizeof(buffer));\n    buffer[n] = '\\0';\n    \n    // Parse the GET request\n    char* path = strstr(buffer, \"GET \");\n    if (path) {\n        path += 4; // Skip past \"GET \"\n        char* end = strchr(path, ' ');\n        if (end) *end = '\\0';\n        \n        // Extract registration number and course\n        char regNo[20], course[20];\n        if (sscanf(path, \"/marks/%[^/]/%s\", regNo, course) == 2) {\n            // Generate a random mark between 60-100\n            int mark = 60 + (rand() % 41);\n            \n            // Format HTTP response\n            sprintf(response, \"HTTP/1.1 200 OK\\r\\nContent-Type: text/plain\\r\\nConnection: close\\r\\n\\r\\n%s\\t%s\\t%d\\n\", \n                    regNo, course, mark);\n        } else {\n            sprintf(response, \"HTTP/1.1 404 Not Found\\r\\nContent-Type: text/plain\\r\\nConnection: close\\r\\n\\r\\nInvalid request path\\n\");\n        }\n    } else {\n        sprintf(response, \"HTTP/1.1 400 Bad Request\\r\\nContent-Type: text/plain\\r\\nConnection: close\\r\\n\\r\\nInvalid HTTP request\\n\");\n    }\n    \n    write(connfd, response, strlen(response));\n}\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    // Initialize random seed\n    srand(time(NULL));\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));\n    listen(sockfd, 5);\n    printf(\"HTTP Server is running on port %d\\n\", PORT);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        printf(\"New connection accepted\\n\");\n        handleRequest(connfd);\n        close(connfd); // Close after handling each request (non-persistent)\n        printf(\"Connection closed\\n\");\n    }\n    return 0;\n}"
+    },
+    "clientPrecode": {
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nvoid fetchMark(const char* reg, const char* course);\n\nint main() {\n    clock_t start = clock();\n    fetchMark(\"21CS1234\", \"CS3101\");\n    fetchMark(\"21CS1234\", \"CS3102\");\n    fetchMark(\"21CS1234\", \"CS3103\");\n    double duration = (double)(clock() - start) / CLOCKS_PER_SEC;\n    printf(\"Time taken: %f seconds\\n\", duration);\n    return 0;\n}\n\nvoid fetchMark(const char* reg, const char* course) {\n    // TODO: Connect, send GET, receive response\n}"
+    },
+    "clientSolution": {
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\n// Function to create a new connection for each request\nvoid fetchMark(const char* reg, const char* course) {\n    int sockfd;\n    struct sockaddr_in servaddr;\n    char request[1024];\n    char response[4096];\n    \n    // Create socket\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd < 0) {\n        perror(\"Socket creation failed\");\n        return;\n    }\n    \n    // Set up server address\n    memset(&servaddr, 0, sizeof(servaddr));\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_port = htons(PORT);\n    servaddr.sin_addr.s_addr = INADDR_ANY; // localhost\n    \n    // Connect to server\n    if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"Connection failed\");\n        close(sockfd);\n        return;\n    }\n    printf(\"Connected to server\\n\");\n    \n    // Format HTTP GET request\n    sprintf(request, \"GET /marks/%s/%s HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\", reg, course);\n    \n    // Send request\n    write(sockfd, request, strlen(request));\n    printf(\"Sent request for %s\\n\", course);\n    \n    // Receive response\n    int n = read(sockfd, response, sizeof(response));\n    response[n] = '\\0';\n    printf(\"Received: %s\\n\", response);\n    \n    // Close connection\n    close(sockfd);\n    printf(\"Connection closed\\n\");\n}\n\nint main() {\n    // Start timer to measure total time for all requests\n    clock_t start = clock();\n    \n    // Make a separate connection for each course\n    fetchMark(\"21CS1234\", \"CS3101\");\n    fetchMark(\"21CS1234\", \"CS3102\");\n    fetchMark(\"21CS1234\", \"CS3103\");\n    \n    // Calculate and print total time\n    double duration = (double)(clock() - start) / CLOCKS_PER_SEC;\n    printf(\"Time taken: %f seconds\\n\", duration);\n    return 0;\n}"
+    },
+    "clientCount": 1,
+    "clientDelay": 0.5,
+    "testCases": {
+      "server": [
+        {
+          "input": "GET /marks/21CS1234/CS3101 HTTP/1.1",
+          "expectedOutput": "HTTP/1.1 200 OK",
+          "description": "Server responds to first course request with 200 OK",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "GET /marks/21CS1234/CS3102 HTTP/1.1",
+          "expectedOutput": "HTTP/1.1 200 OK",
+          "description": "Server responds to second course request with 200 OK",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "GET /marks/21CS1234/CS3101 HTTP/1.1",
+          "expectedOutput": "Connection: close",
+          "description": "Server includes Connection: close header (non-persistent)",
+          "points": 1,
+          "matchType": "contains"
+        }
+      ],
+      "client": [
+        {
+          "input": "Non-persistent connection test",
+          "expectedOutput": "Time taken: [0-9]+\\.[0-9]+ seconds",
+          "description": "Client measures connection time correctly",
+          "points": 2,
+          "matchType": "regex"
+        },
+        {
+          "input": "Multiple connection test",
+          "expectedOutput": "Connected to server",
+          "description": "Client establishes separate connections for each request",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "Connection closure test",
+          "expectedOutput": "Connection closed",
+          "description": "Client properly closes each connection after use",
+          "points": 1,
+          "matchType": "contains"
+        }
+      ]
+    },
+    "evaluationScript": "# Evaluation script for non-persistent HTTP server\nimport socket\nimport time\nimport re\n\ndef evaluate_server(server_port=8080):\n    print(\"Evaluating non-persistent HTTP server...\")\n    connection_count = 0\n    courses = [\"CS3101\", \"CS3102\", \"CS3103\"]\n    success_count = 0\n    \n    try:\n        for course in courses:\n            # Create a new connection for each course (non-persistent)\n            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            s.settimeout(2)  # 2 second timeout\n            s.connect(('localhost', server_port))\n            connection_count += 1\n            \n            # Send HTTP GET request\n            request = f\"GET /marks/21CS1234/{course} HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\"\n            s.send(request.encode())\n            \n            # Receive response\n            response = s.recv(4096).decode()\n            s.close()\n            \n            # Check if response contains 200 OK\n            if \"HTTP/1.1 200 OK\" in response:\n                print(f\"PASS: Server correctly responded to request for {course}\")\n                success_count += 1\n            else:\n                print(f\"FAIL: Server did not respond correctly to request for {course}\")\n                print(f\"Response: {response}\")\n        \n        print(f\"Made {connection_count} separate connections (expected for non-persistent HTTP)\")\n        return success_count == len(courses)\n    \n    except Exception as e:\n        print(f\"FAIL: {str(e)}\")\n        return False\n\ndef evaluate_client(client_output):\n    # We need to parse the client's output to verify it made multiple connections\n    # and measured time correctly\n    \n    # Check for multiple \"Connected to server\" messages\n    connection_matches = re.findall(\"Connected to server\", client_output)\n    if len(connection_matches) >= 3:\n        print(\"PASS: Client establishes multiple connections\")\n    else:\n        print(f\"FAIL: Client should establish at least 3 connections, found {len(connection_matches)}\")\n        return False\n    \n    # Check for timing information\n    time_match = re.search(\"Time taken: ([0-9]+\\.[0-9]+) seconds\", client_output)\n    if time_match:\n        print(f\"PASS: Client correctly measures time: {time_match.group(1)} seconds\")\n    else:\n        print(\"FAIL: Client does not report time correctly\")\n        return False\n    \n    return True\n\n# Main evaluation function\ndef evaluate():\n    server_result = evaluate_server()\n    # In a real evaluation, we would capture client output and evaluate it\n    # For now, we're only evaluating the server behavior\n    return server_result\n\n# Run the evaluation\nevaluate()"
+  },
+  {
+    "title": "HTTP Simulation – Persistent Connection",
+    "description": "<p>Simulate a client-server system where the client fetches marks for multiple courses over a single TCP connection using persistent HTTP behavior.</p><img src=\"http://localhost:5001/uploads/1751863938703-203185157.png\" alt=\"\" style=\"\" draggable=\"true\"><p></p>",
+    "maxMarks": 5,
+    "precode": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nvoid handleClient(int connfd);\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));\n    listen(sockfd, 5);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        handleClient(connfd);\n    }\n    return 0;\n}\n\nvoid handleClient(int connfd) {\n    // TODO: Keep reading GET requests until connection closes\n}"
+    },
+    "solution": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nvoid handleClient(int connfd) {\n    char buffer[4096];\n    char response[8192];\n    srand(time(NULL)); // Initialize random number generator\n    \n    // Keep connection open for multiple requests\n    while (1) {\n        memset(buffer, 0, sizeof(buffer));\n        int n = read(connfd, buffer, sizeof(buffer));\n        \n        // Client disconnected\n        if (n <= 0) {\n            printf(\"Client disconnected\\n\");\n            break;\n        }\n        \n        buffer[n] = '\\0';\n        printf(\"Received: %s\\n\", buffer);\n        \n        // Parse the GET request\n        char* path = strstr(buffer, \"GET \");\n        if (path) {\n            path += 4; // Skip past \"GET \"\n            char* end = strchr(path, ' ');\n            if (end) *end = '\\0';\n            \n            // Extract registration number and course\n            char regNo[20], course[20];\n            if (sscanf(path, \"/marks/%[^/]/%s\", regNo, course) == 2) {\n                // Generate a random mark between 60-100\n                int mark = 60 + (rand() % 41);\n                \n                // Format HTTP response with Connection: keep-alive\n                sprintf(response, \"HTTP/1.1 200 OK\\r\\nContent-Type: text/plain\\r\\nConnection: keep-alive\\r\\n\\r\\n%s\\t%s\\t%d\\n\", \n                        regNo, course, mark);\n            } else {\n                sprintf(response, \"HTTP/1.1 404 Not Found\\r\\nContent-Type: text/plain\\r\\nConnection: keep-alive\\r\\n\\r\\nInvalid request path\\n\");\n            }\n        } else {\n            sprintf(response, \"HTTP/1.1 400 Bad Request\\r\\nContent-Type: text/plain\\r\\nConnection: keep-alive\\r\\n\\r\\nInvalid HTTP request\\n\");\n        }\n        \n        write(connfd, response, strlen(response));\n        printf(\"Response sent\\n\");\n    }\n}\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));\n    listen(sockfd, 5);\n    printf(\"Persistent HTTP Server running on port %d\\n\", PORT);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        printf(\"New connection accepted\\n\");\n        handleClient(connfd); // Handles multiple requests on one connection\n        close(connfd);\n    }\n    return 0;\n}"
+    },
+    "clientPrecode": {
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\nint main() {\n    // TODO: Single connection for all requests\n    return 0;\n}"
+    },
+    "clientSolution": {
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <unistd.h>\n#include <time.h>\n#define PORT 8080\n\n// Function to send request and read response\nvoid sendRequest(int sockfd, const char* reg, const char* course) {\n    char request[1024];\n    char response[4096];\n    \n    // Format HTTP GET request with Connection: keep-alive\n    sprintf(request, \"GET /marks/%s/%s HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: keep-alive\\r\\n\\r\\n\", \n            reg, course);\n    \n    // Send request\n    write(sockfd, request, strlen(request));\n    printf(\"Sent request for %s\\n\", course);\n    \n    // Receive response\n    memset(response, 0, sizeof(response));\n    int n = read(sockfd, response, sizeof(response));\n    response[n] = '\\0';\n    printf(\"Received: %s\\n\", response);\n}\n\nint main() {\n    int sockfd;\n    struct sockaddr_in servaddr;\n    \n    // Start timer to measure total time for all requests\n    clock_t start = clock();\n    \n    // Create a single socket for all requests\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd < 0) {\n        perror(\"Socket creation failed\");\n        return 1;\n    }\n    \n    // Set up server address\n    memset(&servaddr, 0, sizeof(servaddr));\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_port = htons(PORT);\n    servaddr.sin_addr.s_addr = INADDR_ANY; // localhost\n    \n    // Connect to server - only once for all requests\n    if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"Connection failed\");\n        close(sockfd);\n        return 1;\n    }\n    \n    printf(\"Connected to server\\n\");\n    \n    // Send multiple requests over the same connection\n    sendRequest(sockfd, \"21CS1234\", \"CS3101\");\n    sendRequest(sockfd, \"21CS1234\", \"CS3102\");\n    sendRequest(sockfd, \"21CS1234\", \"CS3103\");\n    \n    // Close connection after all requests\n    close(sockfd);\n    printf(\"Connection closed\\n\");\n    \n    // Calculate and print total time\n    double duration = (double)(clock() - start) / CLOCKS_PER_SEC;\n    printf(\"Time taken: %f seconds\\n\", duration);\n    return 0;\n}"
+    },
+    "clientCount": 1,
+    "clientDelay": 0.5,
+    "testCases": {
+      "server": [
+        {
+          "input": "GET /marks/21CS1234/CS3101 HTTP/1.1",
+          "expectedOutput": "HTTP/1.1 200 OK",
+          "description": "Server handles first course request",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "GET /marks/21CS1234/CS3102 HTTP/1.1",
+          "expectedOutput": "HTTP/1.1 200 OK",
+          "description": "Server processes second request on same connection",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "GET /marks/21CS1234/CS3103 HTTP/1.1",
+          "expectedOutput": "HTTP/1.1 200 OK",
+          "description": "Server processes third request on same connection",
+          "points": 1,
+          "matchType": "contains"
+        },
+        {
+          "input": "GET /marks/21CS1234/CS3101 HTTP/1.1",
+          "expectedOutput": "Connection: keep-alive",
+          "description": "Server includes keep-alive header for persistent connection",
+          "points": 2,
+          "matchType": "contains"
+        }
+      ],
+      "client": [
+        {
+          "input": "Persistent connection test",
+          "expectedOutput": "Time taken: [0-9]+\\.[0-9]+ seconds",
+          "description": "Verifies client measures connection time",
+          "points": 2,
+          "matchType": "regex"
+        },
+        {
+          "input": "Single connection test",
+          "expectedOutput": "Connected to server",
+          "description": "Client establishes only one connection for all requests",
+          "points": 1,
+          "matchType": "contains"
+        },
+        {
+          "input": "Multiple requests test",
+          "expectedOutput": "Sent request for CS3101",
+          "description": "Client sends multiple requests over the same connection",
+          "points": 1,
+          "matchType": "contains"
+        },
+        {
+          "input": "Connection: keep-alive test",
+          "expectedOutput": "Connection: keep-alive",
+          "description": "Client includes keep-alive header in requests",
+          "points": 1,
+          "matchType": "contains"
+        }
+      ]
+    },
+    "evaluationScript": "# Evaluation script for persistent HTTP server\nimport socket\nimport time\nimport re\n\ndef evaluate_server(server_port=8080):\n    print(\"Evaluating persistent HTTP server...\")\n    connection_count = 0\n    courses = [\"CS3101\", \"CS3102\", \"CS3103\"]\n    success_count = 0\n    keep_alive_count = 0\n    \n    try:\n        # Create a single connection for all courses (persistent)\n        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n        s.settimeout(5)  # 5 second timeout for all operations\n        s.connect(('localhost', server_port))\n        connection_count += 1\n        \n        for course in courses:\n            # Send HTTP GET request with keep-alive\n            request = f\"GET /marks/21CS1234/{course} HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: keep-alive\\r\\n\\r\\n\"\n            s.send(request.encode())\n            \n            # Receive response\n            response = s.recv(4096).decode()\n            \n            # Check if response contains 200 OK\n            if \"HTTP/1.1 200 OK\" in response:\n                print(f\"PASS: Server correctly responded to request for {course}\")\n                success_count += 1\n            else:\n                print(f\"FAIL: Server did not respond correctly to request for {course}\")\n                print(f\"Response: {response}\")\n            \n            # Check if response contains Connection: keep-alive\n            if \"Connection: keep-alive\" in response:\n                print(f\"PASS: Server includes keep-alive header for {course}\")\n                keep_alive_count += 1\n            else:\n                print(f\"FAIL: Server does not include keep-alive header for {course}\")\n        \n        s.close()\n        print(f\"Made only {connection_count} connection (correct for persistent HTTP)\")\n        return success_count == len(courses) and keep_alive_count == len(courses)\n    \n    except Exception as e:\n        print(f\"FAIL: {str(e)}\")\n        return False\n\ndef evaluate_client(client_output):\n    # We need to parse the client's output to verify it made a single connection\n    # and measured time correctly\n    \n    # Check for single \"Connected to server\" message\n    connection_matches = re.findall(\"Connected to server\", client_output)\n    if len(connection_matches) == 1:\n        print(\"PASS: Client establishes only one connection\")\n    else:\n        print(f\"FAIL: Client should establish exactly 1 connection, found {len(connection_matches)}\")\n        return False\n    \n    # Check for timing information\n    time_match = re.search(\"Time taken: ([0-9]+\\.[0-9]+) seconds\", client_output)\n    if time_match:\n        print(f\"PASS: Client correctly measures time: {time_match.group(1)} seconds\")\n    else:\n        print(\"FAIL: Client does not report time correctly\")\n        return False\n    \n    return True\n\n# Main evaluation function\ndef evaluate():\n    server_result = evaluate_server()\n    # In a real evaluation, we would capture client output and evaluate it\n    # For now, we're only evaluating the server behavior\n    return server_result\n\n# Run the evaluation\nevaluate()"
+  },
+  {
+    "title": "Arithmetic Chat Server",
+    "description": "Develop a client-server model where the client sends arithmetic expressions as strings, and the server parses and computes the result, then sends it back. Server should handle multiple clients using fork().\n\nIn this lab, you will implement a TCP server that listens for client connections and can handle multiple clients concurrently using fork(). Each client will send arithmetic expressions (like '3 + 4' or '12 / 6') as strings. The server should parse the expression, compute the result, and send it back to the client. If the input is invalid, the server should respond with an error message.\n\nKey learning objectives:\n- Practice parsing and evaluating arithmetic expressions in C\n- Use fork() to handle multiple clients concurrently\n- Implement robust error handling for invalid input\n- Deepen your understanding of client-server communication\n\nTest your implementation by sending various valid and invalid expressions from the client and verifying the server's responses.",
+    "maxMarks": 15,
+    "precode": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#define PORT 9090\n\nint evaluate(char *expr);\n\nint main() {\n    // TODO: Setup socket, accept connections, fork per client\n    return 0;\n}\n\nint evaluate(char *expr) {\n    // TODO: Parse and compute simple expressions like 3 + 4\n    return 0;\n}"
+    },
+    "solution": {
+      "server.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n#include <ctype.h>\n\n#define PORT 9090\n\nint evaluate(const char* expr) {\n    int a, b;\n    char op;\n    if (sscanf(expr, \"%d %c %d\", &a, &op, &b) != 3) return -99999;\n\n    switch (op) {\n        case '+': return a + b;\n        case '-': return a - b;\n        case '*': return a * b;\n        case '/': return b != 0 ? a / b : -99999;\n        default: return -99999;\n    }\n}\n\nvoid handle_client(int connfd) {\n    char buffer[256];\n    int n;\n    bzero(buffer, sizeof(buffer));\n\n    recv(connfd, buffer, sizeof(buffer), 0);\n    int result = evaluate(buffer);\n\n    if (result == -99999)\n        strcpy(buffer, \"Error\\n\");\n    else\n        sprintf(buffer, \"%d\\n\", result);\n\n    send(connfd, buffer, strlen(buffer), 0);\n    close(connfd);\n}\n\nint main() {\n    int sockfd, connfd;\n    struct sockaddr_in servaddr, cliaddr;\n    socklen_t len = sizeof(cliaddr);\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n    servaddr.sin_port = htons(PORT);\n\n    bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));\n    listen(sockfd, 5);\n    printf(\"Arithmetic server running on port %d\\n\", PORT);\n\n    while (1) {\n        connfd = accept(sockfd, (struct sockaddr*)&cliaddr, &len);\n        if (fork() == 0) {\n            close(sockfd);\n            handle_client(connfd);\n            exit(0);\n        } else {\n            close(connfd);\n        }\n    }\n\n    return 0;\n}",
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <netinet/in.h>\n#include <sys/socket.h>\n\n#define PORT 9090\n\nint main() {\n    int sockfd;\n    struct sockaddr_in servaddr;\n    char buffer[256];\n\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    servaddr.sin_family = AF_INET;\n    servaddr.sin_port = htons(PORT);\n    servaddr.sin_addr.s_addr = INADDR_ANY;\n\n    if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {\n        perror(\"Connect failed\");\n        return 1;\n    }\n\n    printf(\"Enter expression (e.g., 3 + 4): \");\n    fgets(buffer, sizeof(buffer), stdin);\n\n    send(sockfd, buffer, strlen(buffer), 0);\n    bzero(buffer, sizeof(buffer));\n    recv(sockfd, buffer, sizeof(buffer), 0);\n\n    printf(\"Result from server: %s\\n\", buffer);\n    close(sockfd);\n    return 0;\n}"
+    },
+    "clientPrecode": {
+      "client.c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n#define PORT 9090\n\nint main() {\n    // TODO: Connect to server, send expression, receive result\n    return 0;\n}"
+    },
+    "clientSolution": {
+      "client.c": "// Full working client code that connects to server, sends input like '2 + 3', and prints the result returned by the server."
+    },
+    "clientCount": 1,
+    "clientDelay": 0.5,
+    "testCases": {
+      "server": [
+        {
+          "input": "2 + 3",
+          "expectedOutput": "5",
+          "description": "Test basic addition",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "12 - 7",
+          "expectedOutput": "5",
+          "description": "Test subtraction",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "9 * 6",
+          "expectedOutput": "54",
+          "description": "Test multiplication",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "100 / 5",
+          "expectedOutput": "20",
+          "description": "Test division",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "abc + 4",
+          "expectedOutput": "Error or invalid input",
+          "description": "Handle malformed input gracefully",
+          "points": 2,
+          "matchType": "contains"
+        }
+      ],
+      "client": [
+        {
+          "input": "2 + 3",
+          "expectedOutput": "Result from server: 5",
+          "description": "Client displays result of 2 + 3",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "9 * 6",
+          "expectedOutput": "Result from server: 54",
+          "description": "Client displays exact result of 9 * 6",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "abc + 4",
+          "expectedOutput": "Error or invalid input",
+          "description": "Client handles error message from server",
+          "points": 2,
+          "matchType": "contains"
+        },
+        {
+          "input": "100 / 5",
+          "expectedOutput": "Result from server: 20",
+          "description": "Client displays result of 100 / 5",
+          "points": 2,
+          "matchType": "contains"
+        }
+      ]
+    },
+    "evaluationScript": "# Evaluation script for arithmetic server\nimport socket\nimport time\n\ndef evaluate(server_port=9090):\n    try:\n        # Create TCP socket\n        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n        s.connect(('localhost', server_port))\n        s.settimeout(2)  # 2 second timeout\n        \n        # Test arithmetic functionality\n        test_expression = \"5 + 7\"\n        s.send(test_expression.encode())\n        response = s.recv(1024).decode().strip()\n        expected = \"12\"\n        \n        if response == expected:\n            print(\"PASS: Arithmetic test successful\")\n        else:\n            print(\"FAIL: Arithmetic test failed\")\n            print(f\"Expected: {expected}\")\n            print(f\"Received: {response}\")\n        \n        s.close()\n        return True\n    except Exception as e:\n        print(f\"FAIL: {str(e)}\")\n        return False\n\n# Run the evaluation\nevaluate()"
+  }
+]

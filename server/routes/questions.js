@@ -72,11 +72,54 @@ router.post('/upload-image', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image uploaded' });
     }
     
-    // Return the URL to the uploaded image
-    const imageUrl = `/uploads/${req.file.filename}`;
+    // Return the URL to the uploaded image with absolute path
+    const serverUrl = process.env.SERVER_URL || `http://${req.headers.host}`;
+    const imageUrl = `${serverUrl}/uploads/${req.file.filename}`;
     res.json({ 
       success: true, 
       url: imageUrl
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST api/questions/bulk - bulk upload questions
+router.post('/bulk', async (req, res) => {
+  try {
+    const questions = req.body;
+    
+    if (!Array.isArray(questions)) {
+      return res.status(400).json({ error: 'Request body must be an array of questions' });
+    }
+    
+    const results = {
+      success: [],
+      failed: []
+    };
+    
+    // Process each question
+    for (const questionData of questions) {
+      try {
+        // Create new question
+        const newQuestion = new Question(questionData);
+        await newQuestion.save();
+        
+        results.success.push({
+          id: newQuestion._id,
+          title: newQuestion.title
+        });
+      } catch (err) {
+        results.failed.push({
+          title: questionData.title || 'Unknown',
+          error: err.message
+        });
+      }
+    }
+    
+    res.status(201).json({
+      message: `Successfully created ${results.success.length} questions with ${results.failed.length} failures`,
+      results
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

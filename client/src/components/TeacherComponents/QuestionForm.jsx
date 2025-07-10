@@ -208,6 +208,85 @@ const QuestionForm = ({
         />
       </FormSection>
       
+      <FormSection title="Import/Export">
+        <div className="space-y-4">
+          <div>
+            <FormLabel htmlFor="jsonImport">Import Question from JSON</FormLabel>
+            <div className="flex items-center space-x-3">
+              <input
+                type="file"
+                id="jsonImport"
+                accept=".json"
+                className="block w-full text-sm text-gray-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-md file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-indigo-50 file:text-indigo-700
+                  hover:file:bg-indigo-100"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      try {
+                        const jsonData = JSON.parse(event.target.result);
+                        
+                        // Reset the form with the imported data
+                        reset({
+                          title: jsonData.title || '',
+                          description: jsonData.description || '',
+                          precode: jsonData.precode || initialQuestion.precode,
+                          clientPrecode: jsonData.clientPrecode || initialQuestion.clientPrecode,
+                          solution: jsonData.solution || initialQuestion.solution,
+                          clientSolution: jsonData.clientSolution || initialQuestion.clientSolution,
+                          testCases: jsonData.testCases || initialQuestion.testCases,
+                          clientCount: jsonData.clientCount || initialQuestion.clientCount,
+                          clientDelay: jsonData.clientDelay || initialQuestion.clientDelay,
+                          evaluationScript: jsonData.evaluationScript || ''
+                        });
+                        
+                        // Show success message
+                        alert('Question data imported successfully!');
+                      } catch (error) {
+                        console.error('Error parsing JSON:', error);
+                        alert('Error importing JSON: ' + error.message);
+                      }
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Upload a JSON file to import question data</p>
+          </div>
+          
+          <div className="flex justify-between items-center pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                // Export current form data to JSON
+                const formData = watchedValues;
+                const jsonStr = JSON.stringify(formData, null, 2);
+                
+                // Create a download link
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `question_${formData.title ? formData.title.replace(/\s+/g, '_').toLowerCase() : 'export'}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 transition-colors duration-200"
+            >
+              Export as JSON
+            </button>
+          </div>
+        </div>
+      </FormSection>
+      
       <div className="pt-4 border-t flex space-x-4">
         <button
           type="button"

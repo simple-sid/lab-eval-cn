@@ -1,3 +1,50 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Simple code block styling for the entire application */
+pre {
+  background-color: #f8f8f8 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 0.75rem 1rem !important;
+  margin: 1rem 0 !important;
+  overflow-x: auto !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-size: 0.9rem !important;
+  line-height: 1.5 !important;
+  tab-size: 2 !important;
+  white-space: pre !important;
+}
+
+pre code {
+  background-color: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  display: block !important;
+  color: #374151 !important;
+  white-space: pre !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+}
+
+code {
+  background-color: #f1f5f9 !important;
+  border-radius: 3px !important;
+  padding: 0.1em 0.3em !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-size: 0.9em !important;
+  color: #4b5563 !important;
+}
+
+/* Critical: Ensure the editor preserves whitespace and keeps lines together */
+.ProseMirror pre {
+  white-space: pre !important;
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* Make sure line breaks don't break the code block unity */
+.ProseMirror pre br {
+  white-space: pre !important;
+}

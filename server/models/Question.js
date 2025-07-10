@@ -12,11 +12,15 @@ const testCaseSchema = new mongoose.Schema({
 const baseQuestionSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
-    description: { type: String, required: true }, 
-    // lab: { type: mongoose.Types.ObjectId, ref: "Lab", required: true },
-    lab: { type: String },
+    description: { type: String, required: true },
+    course: { type: mongoose.Types.ObjectId, ref: "Course" }, // Aligned with their Question model
+    lab: { type: String }, // Keep for backward compatibility
+    tags: [{ type: String }], // Aligned with their Question model
     maxMarks: { type: Number, default: 15 },
     moduleType: { type: String, required: true },
+    createdBy: { type: mongoose.Types.ObjectId, ref: "User" }, // Aligned with their Question model
+    creatorId: { type: String }, // For backward compatibility
+    details: { type: Object, default: {} } // For compatibility with their dynamic fields
   },
   { timestamps: true, discriminatorKey: "moduleType" }
 );
