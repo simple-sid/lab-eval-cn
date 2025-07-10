@@ -87,7 +87,7 @@ export default function TestCases({ testCases = [], testCaseResults = [] }) {
 
             {/* Test case details */}
             {isExpanded && (
-              <div className="p-4 border-t border-gray-200">
+              <div className="p-4 border-t border-gray-200 overflow-x-auto">
                 <div className="grid gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
