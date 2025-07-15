@@ -52,6 +52,7 @@ router.post('/save-file', async (req, res) => {
     // console.log('[API] save-file received:', req.body);
     const { userId = 'testuser123', filename, filePath, code } = req.body;
     if (!filename || !code) return res.status(400).json({ error: 'Missing filename or code' });
+    console.log(filePath)
     await saveFileToContainer({ userId, filename, filePath, code });
     console.log('[API] save-file completed successfully');
     res.json({ success: true });
