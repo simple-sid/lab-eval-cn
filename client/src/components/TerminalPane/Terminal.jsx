@@ -32,24 +32,38 @@ const TerminalComponent = ({
     if (!xterm.current) return;
 
     const buffer = xterm.current.buffer.active;
-    const lastLine = buffer.getLine(buffer.length - 1);
+    let lastLineText = '';
 
-    if (!lastLine) return;
-    const lineText = lastLine.translateToString(true).trim();
+    // Look backwards in buffer to find last non-empty line
+    for (let i = buffer.length - 1; i >= 0; i--) {
+      const line = buffer.getLine(i);
+      if (!line) continue;
 
-    const colonIndex = lineText.indexOf(':');
-    const dollarIndex = lineText.lastIndexOf('$');
+      const text = line.translateToString(true).trim();
+      if (text) {
+        lastLineText = text;
+        break;
+      }
+    }
+
+    if (!lastLineText) {
+      console.log('[CWD] No non-empty line found in terminal buffer');
+      return;
+    }
+
+    const colonIndex = lastLineText.indexOf(':');
+    const dollarIndex = lastLineText.lastIndexOf('$');
     let cwd;
 
     if (colonIndex !== -1 && dollarIndex !== -1 && dollarIndex > colonIndex) {
-      cwd = lineText.slice(colonIndex + 1, dollarIndex).trim();
+      cwd = lastLineText.slice(colonIndex + 1, dollarIndex).trim();
     }
 
     if (cwd) {
-      const resolvedCWD = cwd.replace('~','/home/labuser');
+      const resolvedCWD = cwd.replace('~', '/home/labuser');
       setCurrentWorkingDir?.(terminalId, resolvedCWD);
     } else {
-      console.log("[CWD] No prompt-like pattern found in last line");
+      console.log('[CWD] Prompt-like pattern not found in last line');
     }
   };
 
@@ -215,7 +229,7 @@ const TerminalComponent = ({
                   setTimeout(() => {
                     console.log('called');
                     requestCurrentWorkingDir();
-                  }, 100);
+                  }, 50);
                 }
               }
             } catch (err) {
