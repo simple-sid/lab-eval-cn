@@ -63,6 +63,7 @@ export default function CNLabWorkspace() {
   const [showTerminal, setShowTerminal] = useState(false);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [files, setFiles] = useState([]);
+  const [newFileCreated, setNewFileCreated] = useState(true);
   const [fileNo, setFileNo] = useState(1);
   const [tagToFileMap, setTagToFileMap] = useState({}); // Example: { 'server1': 'server_file.c', 'client2': 'client_impl.c' }
   const [currentWorkingDir, setCurrentWorkingDir] = useState('/home/labuser'); // Track current directory
@@ -380,6 +381,10 @@ export default function CNLabWorkspace() {
 
 
   const addNewFile = () => {
+    if(!newFileCreated){
+      return;
+    }
+
     const fileName = `new_file_${fileNo}.${language === 'c' ? 'c' : language === 'python' ? 'py' : 'txt'}`;
     
     const confirmCreate = window.confirm(
@@ -388,6 +393,8 @@ export default function CNLabWorkspace() {
 
     if (!confirmCreate) return;
     setFileNo(fileNo+1);
+
+    setNewFileCreated(false);
 
     const timestamp = Date.now();
     const newId = `file_${timestamp}`;
@@ -406,6 +413,9 @@ export default function CNLabWorkspace() {
       }
     ]);
     setActiveFileId(newId);
+    setTimeout(() => {
+      setNewFileCreated(true);
+    },1000);
   };
 
 

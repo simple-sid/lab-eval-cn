@@ -39,9 +39,12 @@ const TerminalComponent = ({
       const line = buffer.getLine(i);
       if (!line) continue;
 
+      console.log(line);
+
       const text = line.translateToString(true).trim();
       if (text) {
         lastLineText = text;
+        console.log(lastLineText);
         break;
       }
     }
@@ -225,6 +228,8 @@ const TerminalComponent = ({
                 // Strip prompt prefix (everything up to and including the first "$ ")
                 const commandOnly = currentLineText.replace(/^.*?\$\s*/, '').trim();
 
+                console.log(commandOnly);
+
                 if (commandOnly.includes('cd')) {
                   setTimeout(() => {
                     console.log('called');
@@ -378,7 +383,7 @@ const TerminalComponent = ({
     inputReadyRef.current = false;
     setTimeout(() => {
       inputReadyRef.current = true;
-    }, 1000);
+    }, 500);
   }, [isTermVisible, isVisible]);
 
   return (
