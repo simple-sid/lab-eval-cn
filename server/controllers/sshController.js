@@ -232,9 +232,9 @@ async function uploadFileContent(userId, content, remotePath) {
 /**
  * Save file to user's container via SFTP
  */
-export async function saveFileToContainer({ userId, filename, code }) {
+export async function saveFileToContainer({ userId, filePath, code }) {
   // Normalize path
-  const remotePath = filename.startsWith('/') ? filename : `/home/labuser/${filename}`;
+  const remotePath = filePath;
   return uploadFileContent(userId, code, remotePath);
 }
 

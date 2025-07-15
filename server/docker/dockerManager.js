@@ -75,6 +75,7 @@ export async function createContainerForUser(userId) {
       '22/tcp': {},
     },
     HostConfig: {
+      CapAdd: ['NET_ADMIN', 'NET_RAW'],
       PortBindings: {
         '22/tcp': [{ HostPort: sshPort.toString() }],
       },

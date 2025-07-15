@@ -211,10 +211,11 @@ const TerminalComponent = ({
                 // Strip prompt prefix (everything up to and including the first "$ ")
                 const commandOnly = currentLineText.replace(/^.*?\$\s*/, '').trim();
 
-                if (/^cd\b/.test(commandOnly)) {
+                if (commandOnly.includes('cd')) {
                   setTimeout(() => {
+                    console.log('called');
                     requestCurrentWorkingDir();
-                  }, 300);
+                  }, 100);
                 }
               }
             } catch (err) {
@@ -314,13 +315,13 @@ const TerminalComponent = ({
       function runFile() {
         setTimeout(() => {
           let runCmd = '';
-          const justFilename = filename;
+          const justFilename = filePath;
           
           if (language === 'python') {
             runCmd = `python3 -u ${justFilename}`;
           } else if (language === 'c') {
             const exe = justFilename.replace(/\.c$/, '');
-            runCmd = `gcc ${justFilename} -o ${exe} && ./${exe}`;
+            runCmd = `gcc ${justFilename} -o ${exe} && ${exe}`;
           }
           wsRef.current.send(JSON.stringify({ type: 'input', data: `${runCmd}\n`, terminalId }));
         }, 200);
