@@ -17,6 +17,7 @@ const TerminalComponent = ({
   const terminalRef = useRef(null);
   const wsRef = useRef(null);
   const xterm = useRef(null);
+  const commandBufferRef = useRef('');
   const fitAddon = useRef(null);
   const inputReadyRef = useRef(false);
   const cwdListenerRef = useRef(null);
@@ -218,24 +219,21 @@ const TerminalComponent = ({
                 })
               );
 
-              // Detect end of command on Enter key
+              // Append to command buffer unless it's Enter
               if (data === '\r' || data === '\n') {
-                const buffer = xterm.current.buffer.active;
-                const cursorY = buffer.cursorY;
-                const line = buffer.getLine(cursorY);
-                const currentLineText = line?.translateToString(true).trim() || '';
-                
-                // Strip prompt prefix (everything up to and including the first "$ ")
-                const commandOnly = currentLineText.replace(/^.*?\$\s*/, '').trim();
+                const commandOnly = commandBufferRef.current.trim();
+                console.log("Current command:", commandOnly);
 
-                console.log(commandOnly);
-
-                if (commandOnly.includes('cd')) {
+                if (commandOnly.startsWith('cd')) {
                   setTimeout(() => {
                     console.log('called');
                     requestCurrentWorkingDir();
                   }, 50);
                 }
+
+                commandBufferRef.current = ''; // Reset after Enter
+              } else {
+                commandBufferRef.current += data;
               }
             } catch (err) {
               console.error("[WS] Failed to send input:", err);

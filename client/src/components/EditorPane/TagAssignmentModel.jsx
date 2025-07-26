@@ -1,4 +1,4 @@
-export default function TagAssignmentModal({ tags = [], files = [], tagToFileMap = {}, setTagToFileMap, onClose }) {
+export default function TagAssignmentModal({ tags = [], files = [], tagToFileMap, setTagToFileMap, onClose }) {
   if (!tags.length || !files.length) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
@@ -12,10 +12,10 @@ export default function TagAssignmentModal({ tags = [], files = [], tagToFileMap
     );
   }
 
-  const handleChange = (tag, newFileId) => {
+  const handleChange = (tag, newFilePath) => {
     setTagToFileMap(prev => ({
       ...prev,
-      [tag]: newFileId
+      [tag]: newFilePath
     }));
   };
 
@@ -34,7 +34,7 @@ export default function TagAssignmentModal({ tags = [], files = [], tagToFileMap
             >
               <option value="">-- Select File --</option>
               {files.map(f => (
-                <option key={f.id} value={f.id}>
+                <option key={f.id} value={f.path}>
                   {f.name}
                 </option>
               ))}

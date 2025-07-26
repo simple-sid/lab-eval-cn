@@ -708,11 +708,20 @@ export default function CNLabWorkspace() {
 
   //Handle Sumission - eval of test cases and log to DB
   const handleSubmit = async () => {
+    if (Object.keys(tagToFileMap).length !== tags.length) {
+      alert('⚠️ Please assign a file for every required tag before submitting.');
+      return;
+    }
+    
     setIsSubmitting(true);
 
     try {
       const question = questions[activeQuestionIdx];
-      const sourceCode = Object.fromEntries(files.map(f => [f.name, f.code]));
+
+      const requiredFileNames = Object.values(tagToFileMap);
+      const filteredFiles = files.filter(f => requiredFileNames.includes(f.path));
+      console.log(filteredFiles);
+      const sourceCode = Object.fromEntries(filteredFiles.map(f => [f.name, f.code]));
 
       // Step 1 (mocked for now)
       // const evalRes = await fetch('/api/submission/eval', { ... });
