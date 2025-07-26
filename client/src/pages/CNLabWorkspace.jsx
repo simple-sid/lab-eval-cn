@@ -63,6 +63,7 @@ export default function CNLabWorkspace() {
   const [showTerminal, setShowTerminal] = useState(false);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [files, setFiles] = useState([]);
+  const [newFileCreated, setNewFileCreated] = useState(true);
   const [fileNo, setFileNo] = useState(1);
   const [tagToFileMap, setTagToFileMap] = useState({}); // Example: { 'server1': 'server_file.c', 'client2': 'client_impl.c' }
   const [currentWorkingDir, setCurrentWorkingDir] = useState('/home/labuser'); // Track current directory
@@ -380,6 +381,10 @@ export default function CNLabWorkspace() {
 
 
   const addNewFile = () => {
+    if(!newFileCreated){
+      return;
+    }
+
     const fileName = `new_file_${fileNo}.${language === 'c' ? 'c' : language === 'python' ? 'py' : 'txt'}`;
     
     const confirmCreate = window.confirm(
@@ -388,6 +393,8 @@ export default function CNLabWorkspace() {
 
     if (!confirmCreate) return;
     setFileNo(fileNo+1);
+
+    setNewFileCreated(false);
 
     const timestamp = Date.now();
     const newId = `file_${timestamp}`;
@@ -406,6 +413,9 @@ export default function CNLabWorkspace() {
       }
     ]);
     setActiveFileId(newId);
+    setTimeout(() => {
+      setNewFileCreated(true);
+    },1000);
   };
 
 
@@ -698,11 +708,20 @@ export default function CNLabWorkspace() {
 
   //Handle Sumission - eval of test cases and log to DB
   const handleSubmit = async () => {
+    if (Object.keys(tagToFileMap).length !== tags.length) {
+      alert('⚠️ Please assign a file for every required tag before submitting.');
+      return;
+    }
+    
     setIsSubmitting(true);
 
     try {
       const question = questions[activeQuestionIdx];
-      const sourceCode = Object.fromEntries(files.map(f => [f.name, f.code]));
+
+      const requiredFileNames = Object.values(tagToFileMap);
+      const filteredFiles = files.filter(f => requiredFileNames.includes(f.path));
+      console.log(filteredFiles);
+      const sourceCode = Object.fromEntries(filteredFiles.map(f => [f.name, f.code]));
 
       // Step 1 (mocked for now)
       // const evalRes = await fetch('/api/submission/eval', { ... });
