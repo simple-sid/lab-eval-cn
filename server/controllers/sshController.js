@@ -33,8 +33,8 @@ async function createSSHConnection(userId, sshPortOverride = null) {
     .connect({
       host: '127.0.0.1',
       port: sshPort,
-      username: 'labuser',
-      privateKey: fs.readFileSync('./labuser_key'),
+      username: 'networklab',                            // IMPORTANT! TESTING WITH networlab, change
+      privateKey: fs.readFileSync('./networklab_key'),   // to labuser after testing!!!
       readyTimeout: 10000
     });
   });
