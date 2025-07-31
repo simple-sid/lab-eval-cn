@@ -64,23 +64,27 @@ RUN setcap cap_net_raw,cap_net_admin=eip /usr/bin/tcpdump && \
 
 # Restrict both users via aliasing and readonly .bashrc
 RUN for user in labuser networklab; do \
-      echo "export TERM=xterm-256color" >> /home/$user/.bashrc && \
-      echo "export LANG=C.UTF-8" >> /home/$user/.bashrc && \
-      echo "export LC_ALL=C.UTF-8" >> /home/$user/.bashrc && \
-      echo "alias sudo='echo Permission denied'" >> /home/$user/.bashrc && \
-      echo "alias su='echo Permission denied'" >> /home/$user/.bashrc && \
-      echo "alias chmod='echo Permission denied'" >> /home/$user/.bashrc && \
-      echo "alias chown='echo Permission denied'" >> /home/$user/.bashrc && \
-      echo "alias who='echo Permission denied'" >> /home/$user/.bashrc && \
-      echo "alias users='echo Permission denied'" >> /home/$user/.bashrc && \
-      echo "alias top='echo Permission denied'" >> /home/$user/.bashrc && \
-      chown root:root /home/$user/.bashrc && \
-      chmod 444 /home/$user/.bashrc; \
+    echo "export TERM=xterm-256color" >> /home/$user/.bashrc && \
+    echo "export LANG=C.UTF-8" >> /home/$user/.bashrc && \
+    echo "export LC_ALL=C.UTF-8" >> /home/$user/.bashrc && \
+    echo "alias sudo='echo Permission denied'" >> /home/$user/.bashrc && \
+    echo "alias su='echo Permission denied'" >> /home/$user/.bashrc && \
+    echo "alias chmod='echo Permission denied'" >> /home/$user/.bashrc && \
+    echo "alias chown='echo Permission denied'" >> /home/$user/.bashrc && \
+    echo "alias who='echo Permission denied'" >> /home/$user/.bashrc && \
+    echo "alias which='echo Permission denied'" >> /home/$user/.bashrc && \
+    echo "alias users='echo Permission denied'" >> /home/$user/.bashrc && \
+    echo "alias top='echo Permission denied'" >> /home/$user/.bashrc && \
+    chown root:root /home/$user/.bashrc && \
+    chmod 444 /home/$user/.bashrc; \
     done
 
 # Only allow tcpdump and sysctl via sudo for networklab (but no sudo access to anything else)
 RUN echo "networklab ALL=(ALL) NOPASSWD: /usr/bin/tcpdump, /sbin/sysctl, /usr/sbin/sysctl, /bin/sysctl, /usr/bin/sysctl" > /etc/sudoers.d/networklab_limited && \
     chmod 440 /etc/sudoers.d/networklab_limited
+
+# Allow sudo sysctl to write to read only files 
+RUN echo "alias sysctl='/usr/bin/sudo sysctl'" >> /home/networklab/.bashrc
 
 # Working directory for SSH login
 WORKDIR /home/labuser

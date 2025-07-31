@@ -242,6 +242,19 @@ const TerminalComponent = ({
         };
         term.onData(onDataHandler);
 
+        term.onResize(({ cols, rows }) => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                type: 'resize',
+                cols,
+                rows,
+                terminalId
+              })
+            );
+          }
+        });
+
         // Observe container resize to auto-fit and keep cursor visible
         if (terminalRef.current) {
           const resizeObserver = new window.ResizeObserver(() => {

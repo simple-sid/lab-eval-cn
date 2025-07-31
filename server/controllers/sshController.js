@@ -33,8 +33,8 @@ async function createSSHConnection(userId, sshPortOverride = null) {
     .connect({
       host: '127.0.0.1',
       port: sshPort,
-      username: 'networklab',                            // IMPORTANT! TESTING WITH networlab, change
-      privateKey: fs.readFileSync('./networklab_key'),   // to labuser after testing!!!
+      username: 'labuser',                          
+      privateKey: fs.readFileSync('./labuser_key'),   
       readyTimeout: 10000
     });
   });
@@ -70,8 +70,8 @@ export function initSSHWebSocket(server) {
         // Request shell with explicit PTY for interactive programs
         conn.shell({
           term: 'xterm-256color',
-          cols: 80,
-          rows: 24,
+          cols: 240,
+          rows: 20,
           width: 640,
           height: 480
         }, (err, stream) => {
