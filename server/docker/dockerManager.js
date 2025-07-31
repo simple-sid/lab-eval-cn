@@ -15,8 +15,8 @@ function generateSessionId() {
   const year = now.getFullYear();
   const month = `${now.getMonth() + 1}`.padStart(2, '0');
   const day = `${now.getDate()}`.padStart(2, '0');
-  const period = now.getHours() < 12 ? 'FN' : 'AN';
-  return `${year}${month}${day}_${period}`;
+  const period = now.getHours() < 12 ? 'AN' : 'FN'; 
+  return `${year}${month}${day}_${period}`;         
 }
 
 /**
@@ -75,7 +75,8 @@ export async function createContainerForUser(userId) {
       '22/tcp': {},
     },
     HostConfig: {
-      CapAdd: ['NET_ADMIN', 'NET_RAW'],
+      Privileged: true, // this is what gives write access to /proc/sys
+      CapAdd: ['NET_ADMIN', 'NET_RAW', 'SYS_ADMIN'], // Added SYS_ADMIN
       PortBindings: {
         '22/tcp': [{ HostPort: sshPort.toString() }],
       },

@@ -28,3 +28,6 @@ dist-ssr
 #ssh-key
 
 labuser_key
+labuser_key.pub
+networklab_key
+networklab_key.pub

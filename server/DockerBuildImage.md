@@ -3,9 +3,13 @@
 On your host (not inside the container):
 
     ssh-keygen -t rsa -b 2048 -f ./labuser_key -N ""
+    ssh-keygen -t rsa -b 2048 -f ./networklab_key -N ""
 
-    •	labuser_key – private key
+    •	labuser_key – private key      ->  Connect to labuser for student environment
     •	labuser_key.pub – public key
+
+    •   networklab_key - private key   ->  Connect to networklab for evaluation scripts
+    •   networklab_key - public key
 
 You’ll use labuser_key to connect from your backend, and labuser_key.pub will go inside the container.
 
