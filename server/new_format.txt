@@ -1,0 +1,53 @@
+===================  student details file ====================================================
+
+student_name="name of the student"
+student_id="202310xx"
+
+this content should be present in the student.sh file in
+the directory containing the script.sh
+
+
+================== TO RUN THE SCRIPT ==========================================================
+
+                question number
+                  V
+
+        ./script_Q_1.sh "/home/labuser/server1.c /home/labuser/server2.c" "/home/labuser/client1.c /home/labuser/client2.c" "/home/labuser/proxy1.c"
+            ^                                   ^                                       ^                                               ^
+            |                                   |                                       |                                               |
+seperate script to              server files with absolute path                 client files with absolute path                 hybrid files
+run each quesetion              seperated by a space                            seperated by a space
+
+
+
+ NOTE : hybrid files are c code which act as both client and server LIKE A PROXY.   
+                                                                                                                                                                                                                                                                                                                                                                                                                                           ====================== PRE DEFINED PORT ALLOCATION ==================================== 
+
+NOTE: A file named "clientPorts.sh" should be present in
+      the directory containing the script.sh
+
+
+FILE CONTENTS OF clientPorts.sh:
+-----------------------------------
+#!/bin/bash
+
+declare -a CLIENT_PORT
+declare -a PROXY_PORT
+
+CLIENT_PORT[0]=5001
+CLIENT_PORT[1]=5002
+
+PROXY_PORT[0]=6001
+PROXY_PORT[1]=6002
+----------------------------------
+
+extra ports can be added to the above file(clientPort.sh)
+
+The ephemeral port series starting from 5001 is allocated to the client files only.
+The ephemeral port series starting from 6001 is allocated to the proxy/hybrid files only.
+
+==========================================================================================
+
+
+
+

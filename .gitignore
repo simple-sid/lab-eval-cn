@@ -140,3 +140,8 @@ dist
 
 # main team repo
 LabEvaluationSystem/
+
+# evaluation scripts
+kmam/
+kmam-2/
+kmam-3/

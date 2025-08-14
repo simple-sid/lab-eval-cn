@@ -3,15 +3,15 @@ import mongoose from 'mongoose';
 const submissionSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   questionId: { type: String, required: true },
-  sessionId: { type: String, required: true },
-  module: { type: String, required: true },
-  sourceCode: { type: Object,
-                required: true,
-              },
-  language: { type: String, required: true },
-  submittedAt: { type: Date, default: Date.now },
-  passedCount: { type: Number, required: true },
-  totalTestCases: { type: Number, required: true }
+  sessionId: { type: String },
+  // module: { type: String, required: true },
+  sourceCode: { type: Object },
+  language: { type: String }, // required: true ?
+  // passedCount: { type: Number, required: true },
+  totalTestCases: { type: Number },
+  evaluationResults: { type: [Object] },
+  score: { type: Number},
+  isBestSubmission: { type: Boolean, default: false }
 }, {collection: 'submissions', timestamps: true });
 
 export default mongoose.model('Submission', submissionSchema);

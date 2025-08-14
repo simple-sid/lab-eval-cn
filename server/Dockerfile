@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
     iputils-ping \
     net-tools \
     tcpdump \
+    netcat \
+    libpcap-dev \
+    libcap2-bin \
     traceroute \
     iproute2 \
     vim nano curl bash psmisc lsof procps \
@@ -62,6 +65,22 @@ RUN ssh-keygen -A
 RUN setcap cap_net_raw,cap_net_admin=eip /usr/bin/tcpdump && \
     setcap cap_dac_read_search=eip /usr/bin/lsof || true
 
+
+#========================= changes made earlier ====================================
+
+# # Install sudo first before touching sudoers
+# RUN apt-get update && apt-get install -y sudo
+
+# # Labuser can run commands with sudo without password, Set shell to bash
+# RUN echo "labuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+#     echo "labuser ALL=(ALL) NOPASSWD:/usr/sbin/tcpdump" >> /etc/sudoers && \
+#     chsh -s /bin/bash labuser && \
+#     chsh -s /bin/bash labuser && \
+#     TCPDUMP_PATH=$(which tcpdump) && \
+#     if [ -f "$TCPDUMP_PATH" ]; then \
+#         setcap cap_net_raw,cap_net_admin=eip "$TCPDUMP_PATH"; \
+#     fi
+
 # Restrict both users via aliasing and readonly .bashrc
 RUN for user in labuser networklab; do \
     echo "export TERM=xterm-256color" >> /home/$user/.bashrc && \
@@ -96,4 +115,29 @@ USER root
 EXPOSE 22
 
 # Start SSH
+
+#=========================== changes made earlier ===================================
+
+# # Ensure proper shell initialization for interactive programs
+# RUN echo 'export TERM=xterm-256color' >> ~/.bashrc && \
+#     echo 'export LANG=C.UTF-8' >> ~/.bashrc && \
+#     echo 'export LC_ALL=C.UTF-8' >> ~/.bashrc && \
+#     echo 'export PATH=$PATH:/usr/bin:/sbin:/usr/sbin:/usr/local/bin' >> ~/.bashrc
+
+# # Switch back to root for SSH daemon startup
+# USER root
+
+# # Make tcpdump run as root for all users
+# RUN chmod u+s /usr/bin/tcpdump
+
+# # Allow labuser to run sysctl without password
+# RUN echo "labuser ALL=(ALL) NOPASSWD:/sbin/sysctl" >> /etc/sudoers
+
+# # (Optional, but recommended) Set the ephemeral port range to avoid sysctl errors
+# RUN sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+
+# # Ensure sudo is in PATH for labuser
+# RUN ln -sf $(which sudo) /usr/local/bin/sudo
+
+# # Start SSH daemon
 CMD ["/usr/sbin/sshd", "-D"]

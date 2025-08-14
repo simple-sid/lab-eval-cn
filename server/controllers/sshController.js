@@ -538,3 +538,82 @@ export async function runAndEvaluate({
     throw error;
   }
 }
+
+
+
+
+/**
+ * Runs the evaluation workflow: saves code, copies scripts, runs evaluation, fetches result CSVs.
+ */
+export async function runEvaluation(userId, questionId, serverCode, clientCode) {
+  // * accept arrays for server and client files and update evaluation command to use the files from arrays *
+  try {
+    // Create or get container/session
+    const { containerName } = await createContainerForUser(userId);
+
+    // Save server and client code files
+    await saveFileToContainer({ userId, filePath: '/home/labuser/evaluation/nserver.c', code: serverCode });
+    await saveFileToContainer({ userId, filePath: '/home/labuser/evaluation/nclient.c', code: clientCode });
+
+    // Copy evaluation scripts (kmam) to /home/labuser/kmam
+    const localEvalpath = path.resolve(__dirname, '../../kmam');
+    const remoteEvalpath = '/home/labuser/kmam';
+    await execSSH(userId, `mkdir -p ${remoteEvalpath}`);
+    
+    // Recursively upload all files in kmam (simple implementation: upload each file)
+    const files = fs.readdirSync(localEvalpath);
+    for (const file of files) {
+      const localFile = path.join(localEvalpath, file);
+      const remoteFile = `${remoteEvalpath}/${file}`;
+      if (fs.statSync(localFile).isFile()) {
+        await uploadLocalFile(userId, localFile, remoteFile);
+      }
+      // to support subdirectories, add recursive logic here
+    }
+
+    // Run evaluation script (nice.sh)
+    // not sure about how ordering of arguments is going to be done
+    const evalCmd = `cd ${remoteEvalpath} && ./nice.sh "nserver.c" "nclient.c nclient.c nclient.c"`; 
+
+    const { stdout, stderr } = await execSSH(userId, evalCmd);
+    console.log(`Evaluation stdout:`, stdout);
+    if (stderr) console.error(`Evaluation stderr:`, stderr);
+
+    // Read result files
+    const evaluatedCsv = await readFileFromContainer(userId, `${remoteEvalpath}/${userId}_evaluated.csv`);
+    const connCsv = await readFileFromContainer(userId, `${remoteEvalpath}/${userId}_conn.csv`);
+    const statusCsv = await readFileFromContainer(userId, `${remoteEvalpath}/${userId}_status.csv`);
+
+    return {
+      evaluated: evaluatedCsv,
+      conn: connCsv,
+      status: statusCsv
+    };
+  } catch (error) {
+    console.error(`Error running evaluation for user ${userId}:`, error);
+    throw error;
+  }
+}
+// Helper: Read file content from container via SFTP
+async function readFileFromContainer(userId, remotePath) {
+  let conn;
+  try {
+    conn = await createSSHConnection(userId);
+    return new Promise((resolve, reject) => {
+      conn.sftp((err, sftp) => {
+        if (err) {
+          conn.end();
+          return reject(err);
+        }
+        let data = '';
+        const stream = sftp.createReadStream(remotePath);
+        stream.on('data', chunk => { data += chunk.toString(); });
+        stream.on('end', () => { conn.end(); resolve(data); });
+        stream.on('error', err => { conn.end(); reject(err); });
+      });
+    });
+  } catch (err) {
+    if (conn) conn.end();
+    throw err;
+  }
+}
